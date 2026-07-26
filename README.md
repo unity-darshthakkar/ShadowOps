@@ -14,19 +14,39 @@ It reconstructs the actual workflow from structured activity logs, compares it t
 ### Without Docker
 
 **Backend (Python 3.11+):**
-```bash
+
+**Windows (PowerShell):**
+```powershell
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-cp .env.example .env             # configure watsonx credentials if available
+Copy-Item .env.example .env   # configure watsonx credentials if available
+python -m uvicorn backend.main:app --reload --port 8000
+```
+
+**macOS/Linux (bash/zsh):**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # configure watsonx credentials if available
 python -m uvicorn backend.main:app --reload --port 8000
 ```
 
 **Frontend (Node 18+, separate terminal):**
+
+**Windows (PowerShell):**
+```powershell
+cd frontend
+npm install
+npm run dev          # runs on http://localhost:5173
+```
+
+**macOS/Linux (bash/zsh):**
 ```bash
 cd frontend
 npm install
-npm run dev                      # runs on http://localhost:5173
+npm run dev          # runs on http://localhost:5173
 ```
 
 ### With Docker (requires Docker Desktop)
@@ -35,6 +55,20 @@ docker build -t shadowops .
 docker run -p 8000:8000 --env-file .env shadowops
 # Open http://localhost:8000
 ```
+
+---
+
+## Windows-Specific Notes
+
+- **Python version**: Python 3.11+ is required (tested on 3.11–3.13). Use the official installer from python.org.
+- **Virtual environments**: Use `.venv\Scripts\Activate.ps1` in PowerShell (not `source .venv/bin/activate`).
+- **PowerShell execution policy**: If script execution is blocked, run:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+- **Path separators**: Use backslashes `\` in PowerShell (e.g., `backend\main.py`) or forward slashes `/` — both work in modern PowerShell.
+- **Database file**: SQLite database (`test_shadowops.db`) is created in the project root automatically.
+- **Frontend build**: Runs on Vite dev server (port 5173). Ensure port 5173 is not blocked by Windows Firewall.
 
 ---
 
@@ -109,3 +143,9 @@ frontend/         React/TypeScript/Vite app
 docs/             Architecture and planning documents
 backend/data/     Synthetic seed scenarios
 ```
+
+---
+
+## CLAUDE_REVIEW.md
+
+See [CLAUDE_REVIEW.md](CLAUDE_REVIEW.md) for the architecture review, priority issues fixed, and outstanding items.

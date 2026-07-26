@@ -15,13 +15,17 @@ from backend.models.schemas import (
     DISCLAIMER,
 )
 from backend.routers.scenarios import get_scenario_by_id
-from backend.services import workflow_reconstructor, hidden_work_detector, metrics_calculator, granite_analyser
+from backend.services import workflow_reconstructor, hidden_work_detector, metrics_calculator, granite_analyser, redaction
 
 router = APIRouter()
 
 
 def _run_analysis(scenario: dict, settings: Settings) -> AnalysisResult:
     events = scenario.get("events", [])
+
+    # Redact PII from event notes before any processing
+    events = redaction.redact_events(events)
+
     proposal = scenario.get("automation_proposal", {})
 
     official_wf, actual_wf = workflow_reconstructor.reconstruct(events)
@@ -39,7 +43,14 @@ def _run_analysis(scenario: dict, settings: Settings) -> AnalysisResult:
         proposal=proposal,
         safer_steps=cached_steps,
     )
-    granite_out = granite_analyser.analyse(metrics=metrics, hidden=hidden, settings=settings)
+    granite_out = granite_analyser.analyse(
+        metrics=metrics,
+        hidden=hidden,
+        settings=settings,
+        official_workflow=official_wf,
+        actual_workflow=actual_wf,
+        proposal=proposal,
+    )
 
     # Recompute missing_fallback_count with final safer steps
     metrics = metrics_calculator.calculate(
@@ -114,5 +125,19 @@ def get_report(analysis_id: str, db: Session = Depends(get_db)):
 
 @router.get("/demo/provider-status", response_model=ProviderStatusResponse)
 def provider_status(settings: Settings = Depends(get_settings)) -> ProviderStatusResponse:
-    provider = "live_granite" if settings.has_watsonx_credentials else "cached_demo"
-    return ProviderStatusResponse(provider=provider)
+    """
+    Return the provider that would actually be used for Granite calls.
+    Returns 'cached_demo' if credentials are missing OR if the SDK is unavailable.
+    """
+    # First check if credentials exist
+    if not settings.has_watsonx_credentials:
+        return ProviderStatusResponse(provider="cached_demo")
+
+    # Then check if the SDK is importable
+    try:
+        from ibm_watsonx_ai.foundation_models import ModelInference  # noqa: F401
+        # Credentials and SDK available - would attempt live call
+        return ProviderStatusResponse(provider="live_granite")
+    except Exception:
+        # SDK not installed or import failed
+        return ProviderStatusResponse(provider="cached_demo")

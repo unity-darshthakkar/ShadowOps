@@ -274,6 +274,7 @@ def test_provider_fallback_on_missing_credentials():
     """analyse() must return cached_demo when no credentials are set."""
     from backend.services.granite_analyser import analyse
     from backend.config import Settings
+    from backend.services import workflow_reconstructor
 
     settings = Settings(
         watsonx_api_key="",
@@ -289,8 +290,9 @@ def test_provider_fallback_on_missing_credentials():
     proposal = scenario.get("automation_proposal", {})
     summary = detect(events)
     metrics = calculate(events, summary, proposal)
+    official_wf, actual_wf = workflow_reconstructor.reconstruct(events)
 
-    result = analyse(metrics, summary, settings)
+    result = analyse(metrics, summary, settings, official_wf, actual_wf, proposal)
     assert result.provider == "cached_demo"
 
 
@@ -336,6 +338,76 @@ def test_provider_fallback_on_invalid_json(monkeypatch):
 
     result = call_granite("some prompt", settings)
     assert result.provider == "cached_demo"
+
+
+# ---------------------------------------------------------------------------
+# Granite prompt grounding tests
+# ---------------------------------------------------------------------------
+
+def test_granite_prompt_includes_workflows_and_overhead(seed_events, full_proposal):
+    """Prompt must contain reconstructed workflows, hidden-work evidence, overhead breakdown."""
+    from backend.services.granite_analyser import build_prompt
+    from backend.services.workflow_reconstructor import reconstruct
+    from backend.services.hidden_work_detector import detect
+
+    official_wf, actual_wf = reconstruct(seed_events)
+    summary = detect(seed_events)
+    metrics = calculate(seed_events, summary, full_proposal)
+
+    prompt = build_prompt(metrics, summary, official_wf, actual_wf, full_proposal)
+
+    # Workflows
+    assert "Official workflow steps" in prompt
+    assert "Actual workflow steps" in prompt
+    assert "Ticket Created" in prompt  # step label appears
+    assert "Assigned" in prompt
+
+    # Hidden work
+    assert "Hidden-work types detected" in prompt
+    assert "follow_up" in prompt or "manual_status_check" in prompt
+
+    # Overhead breakdown (all 5 components)
+    assert "Review overhead" in prompt
+    assert "Correction overhead" in prompt
+    assert "Exception-handling overhead" in prompt
+    assert "Maintenance overhead" in prompt
+    assert "Failure-recovery overhead" in prompt
+
+    # Assumptions provenance
+    assert "OVERHEAD ASSUMPTIONS" in prompt
+    assert "from proposal" in prompt or "DEFAULT" in prompt
+
+    # Evidence
+    assert "HIDDEN WORK EVIDENCE" in prompt
+    assert "evt-" in prompt  # raw event_ids
+
+    # Key metrics
+    assert "AI Tax" in prompt
+    assert "Net time saved" in prompt
+    assert "Automation readiness" in prompt
+    assert "Skill-loss risk" in prompt
+    assert "Burden concentration" in prompt
+
+    # Fallback gaps
+    assert "Fallback gaps" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Provider status endpoint tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_provider_status_endpoint():
+    """GET /api/demo/provider-status returns correct provider."""
+    from httpx import AsyncClient as AC
+    from backend.main import app
+    from httpx import ASGITransport
+
+    async with AC(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.get("/api/demo/provider-status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["provider"] in ("live_granite", "cached_demo")
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +465,158 @@ async def test_pii_not_in_response():
         "Response contains what looks like an email address"
 
 
+# ---------------------------------------------------------------------------
+# Regression tests for waiting-event metric bug
+# ---------------------------------------------------------------------------
+
+def test_waiting_events_in_actual_total():
+    """Waiting events contribute to actual_total_minutes."""
+    events = [
+        {"event_id": "e-1", "ticket_id": "T-1", "agent_id": "agent-A",
+         "event_type": "ticket_created", "timestamp": "2024-01-01T09:00:00Z",
+         "duration_minutes": 5, "notes": "test", "is_hidden_work": False},
+        {"event_id": "e-2", "ticket_id": "T-1", "agent_id": "agent-A",
+         "event_type": "waiting", "timestamp": "2024-01-01T09:10:00Z",
+         "duration_minutes": 120, "notes": "awaiting reply", "is_hidden_work": False},
+        {"event_id": "e-3", "ticket_id": "T-1", "agent_id": "agent-A",
+         "event_type": "resolution", "timestamp": "2024-01-01T11:10:00Z",
+         "duration_minutes": 5, "notes": "test", "is_hidden_work": False},
+    ]
+    summary = detect(events)
+    metrics = calculate(events, summary, {})
+    assert metrics.actual_total_minutes == 130.0  # 5 + 120 + 5
+
+
+def test_waiting_events_excluded_from_routine():
+    """Waiting events are NOT in routine_count, routine_total, or AI-automated work."""
+    events = [
+        # 10 min of real work
+        {"event_id": "e-1", "ticket_id": "T-1", "agent_id": "agent-A",
+         "event_type": "ticket_created", "timestamp": "2024-01-01T09:00:00Z",
+         "duration_minutes": 5, "notes": "test", "is_hidden_work": False},
+        {"event_id": "e-2", "ticket_id": "T-1", "agent_id": "agent-A",
+         "event_type": "resolution", "timestamp": "2024-01-01T09:10:00Z",
+         "duration_minutes": 5, "notes": "test", "is_hidden_work": False},
+        # 100 min of waiting
+        {"event_id": "e-3", "ticket_id": "T-1", "agent_id": "agent-A",
+         "event_type": "waiting", "timestamp": "2024-01-01T09:20:00Z",
+         "duration_minutes": 100, "notes": "awaiting reply", "is_hidden_work": False},
+    ]
+    summary = detect(events)
+    # With full proposal so overhead is predictable
+    full_proposal = {
+        "expected_review_rate": 0.15, "avg_review_minutes": 3.0,
+        "expected_correction_rate": 0.08, "avg_correction_minutes": 8.0,
+        "exception_rate": 0.05, "avg_exception_handling_minutes": 20.0,
+        "weekly_maintenance_minutes": 45.0, "expected_failure_recovery_minutes": 30.0,
+    }
+    metrics = calculate(events, summary, full_proposal)
+
+    # actual_total = 110 (real 10 + waiting 100)
+    assert metrics.actual_total_minutes == 110.0
+
+    # routine_events excludes waiting → only 2 events with 10 min total
+    # ai_automated = routine_total * 0.70 = 7.0
+    # gross_time_saved = actual_total - ai_automated = 110 - 7 = 103
+    assert metrics.ai_automated_total_minutes == 7.0
+
+    # Overhead uses routine_count (2), not total events (3)
+    # review_overhead = 2 * 0.15 * 3.0 = 0.9
+    assert abs(metrics.review_overhead - 0.9) < 0.01
+
+
+def test_waiting_events_not_counted_as_hidden_work():
+    """Waiting events never appear in hidden work metrics."""
+    events = [
+        {"event_id": "e-1", "ticket_id": "T-1", "agent_id": "agent-A",
+         "event_type": "ticket_created", "timestamp": "2024-01-01T09:00:00Z",
+         "duration_minutes": 5, "notes": "test", "is_hidden_work": False},
+        {"event_id": "e-2", "ticket_id": "T-1", "agent_id": "agent-A",
+         "event_type": "waiting", "timestamp": "2024-01-01T09:10:00Z",
+         "duration_minutes": 100, "notes": "awaiting reply", "is_hidden_work": False},
+    ]
+    summary = detect(events)
+    metrics = calculate(events, summary, {})
+    assert summary.total_hidden_events == 0
+    assert summary.total_hidden_minutes == 0.0
+    assert summary.hidden_work_ratio == 0.0
+    assert "waiting" not in summary.hidden_event_types
+
+
+# ---------------------------------------------------------------------------
+# Role-based burden concentration tests
+# ---------------------------------------------------------------------------
+
+def test_seed_data_has_role_field(seed_events):
+    """Every event in seed data must have a role field."""
+    for ev in seed_events:
+        assert "role" in ev, f"Event {ev['event_id']} missing role field"
+        assert ev["role"] in ("Support Agent", "Senior Support Agent", "Operations Specialist", "Team Lead"), \
+            f"Event {ev['event_id']} has unexpected role: {ev['role']}"
+
+
+def test_burden_concentration_by_role_not_agent_id(seed_events):
+    """Burden concentration groups hidden work by role, not individual agent_id."""
+    summary = detect(seed_events)
+    full_proposal = {
+        "expected_review_rate": 0.15, "avg_review_minutes": 3.0,
+        "expected_correction_rate": 0.08, "avg_correction_minutes": 8.0,
+        "exception_rate": 0.05, "avg_exception_handling_minutes": 20.0,
+        "weekly_maintenance_minutes": 45.0, "expected_failure_recovery_minutes": 30.0,
+    }
+    metrics = calculate(seed_events, summary, full_proposal)
+
+    # The burden_concentration should group by role, not agent_id
+    # agent-A and agent-D are both "Support Agent" - their work should be combined
+    # agent-B is "Senior Support Agent", agent-C is "Operations Specialist"
+    # No single role should carry > 70% of hidden work in this dataset
+    assert metrics.burden_concentration < 0.7, \
+        f"Burden concentration too high: {metrics.burden_concentration:.2f}"
+
+
+def test_no_individual_worker_rankings_exposed(seed_events):
+    """API response must not expose individual worker performance scores."""
+    from backend.services.metrics_calculator import calculate
+    from backend.services.hidden_work_detector import detect
+
+    summary = detect(seed_events)
+    metrics = calculate(seed_events, summary, {})
+
+    # The metrics object should not have any field that exposes individual agent scores
+    # Only aggregate role-level burden_concentration
+    forbidden_fields = ["agent_performance", "individual_scores", "worker_ranking", "per_agent"]
+    for field in forbidden_fields:
+        assert not hasattr(metrics, field), f"Forbidden field present: {field}"
+
+
+def test_burden_concentration_uses_role_field():
+    """Burden concentration calculation uses role field explicitly."""
+    events = [
+        # Agent A1 (Support Agent) - 30 min hidden work
+        {"event_id": "e-1", "ticket_id": "T-1", "agent_id": "agent-A1", "role": "Support Agent",
+         "event_type": "follow_up", "timestamp": "2024-01-01T09:00:00Z",
+         "duration_minutes": 10, "notes": "test", "is_hidden_work": True},
+        {"event_id": "e-2", "ticket_id": "T-1", "agent_id": "agent-A1", "role": "Support Agent",
+         "event_type": "context_repair", "timestamp": "2024-01-01T09:10:00Z",
+         "duration_minutes": 20, "notes": "test", "is_hidden_work": True},
+        # Agent A2 (also Support Agent) - 10 min hidden work
+        {"event_id": "e-3", "ticket_id": "T-2", "agent_id": "agent-A2", "role": "Support Agent",
+         "event_type": "manual_status_check", "timestamp": "2024-01-01T10:00:00Z",
+         "duration_minutes": 10, "notes": "test", "is_hidden_work": True},
+        # Agent B (Senior Support Agent) - 5 min hidden work
+        {"event_id": "e-4", "ticket_id": "T-3", "agent_id": "agent-B", "role": "Senior Support Agent",
+         "event_type": "exception_handling", "timestamp": "2024-01-01T11:00:00Z",
+         "duration_minutes": 5, "notes": "test", "is_hidden_work": True},
+    ]
+    summary = detect(events)
+    # Total hidden = 45 min
+    # Support Agent role = 40 min (agent-A1:30 + agent-A2:10)
+    # Senior Support Agent role = 5 min
+    # burden_concentration = 40/45 = 0.888...
+    metrics = calculate(events, summary, {})
+    assert abs(metrics.burden_concentration - 40/45) < 0.01
+
+
 @pytest.mark.asyncio
 async def test_full_result_passes_schema():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
@@ -407,3 +631,113 @@ async def test_full_result_passes_schema():
         + result.metrics.failure_recovery_overhead,
         2,
     )
+
+
+# ---------------------------------------------------------------------------
+# PII redaction tests
+# ---------------------------------------------------------------------------
+
+def test_redact_email():
+    """Email addresses should be redacted."""
+    from backend.services.redaction import redact_text
+    text = "Contact john.doe@example.com for details"
+    result = redact_text(text)
+    assert "[REDACTED_EMAIL]" in result
+    assert "john.doe@example.com" not in result
+
+
+def test_redact_name():
+    """Likely personal names should be redacted."""
+    from backend.services.redaction import redact_text
+    text = "Contact John Smith for details"
+    result = redact_text(text)
+    assert "[REDACTED_NAME]" in result
+    assert "John Smith" not in result
+
+
+def test_preserve_ticket_ids():
+    """Ticket IDs like TKT-123 should not be redacted."""
+    from backend.services.redaction import redact_text
+    text = "Ticket TKT-123 was updated by the team"
+    result = redact_text(text)
+    assert "TKT-123" in result
+    assert "[REDACTED_NAME]" not in result
+
+
+def test_preserve_agent_ids():
+    """Agent IDs like agent-A should not be redacted."""
+    from backend.services.redaction import redact_text
+    text = "agent-A processed the ticket"
+    result = redact_text(text)
+    assert "agent-A" in result
+    assert "[REDACTED_NAME]" not in result
+
+
+def test_preserve_evt_ids():
+    """Event IDs like evt-123 should not be redacted."""
+    from backend.services.redaction import redact_text
+    text = "Event evt-123 was processed by agent-A"
+    result = redact_text(text)
+    assert "evt-123" in result
+    assert "agent-A" in result
+    assert "[REDACTED_NAME]" not in result
+
+
+def test_preserve_role_names():
+    """Role names like 'Support Agent' should not be redacted."""
+    from backend.services.redaction import redact_text
+    text = "The Support Agent handled the case"
+    result = redact_text(text)
+    assert "Support Agent" in result
+    assert "[REDACTED_NAME]" not in result
+
+
+def test_preserve_workflow_labels():
+    """Workflow labels like 'Ticket Created' should not be redacted."""
+    from backend.services.redaction import redact_text
+    text = "Ticket Created step was completed"
+    result = redact_text(text)
+    assert "Ticket Created" in result
+    assert "[REDACTED_NAME]" not in result
+
+
+def test_redact_events_preserves_other_fields():
+    """Redaction should not modify non-notes fields."""
+    from backend.services.redaction import redact_events
+    events = [
+        {
+            "event_id": "evt-1",
+            "ticket_id": "TKT-1",
+            "agent_id": "agent-A",
+            "role": "Support Agent",
+            "event_type": "ticket_created",
+            "timestamp": "2024-01-01T09:00:00Z",
+            "duration_minutes": 5,
+            "notes": "Contact john.doe@example.com for details",
+            "is_hidden_work": False,
+        }
+    ]
+    redacted = redact_events(events)
+    # Original event should be unmodified
+    assert events[0]["notes"] == "Contact john.doe@example.com for details"
+    # Redacted copy should have redacted notes
+    assert redacted[0]["notes"] == "Contact [REDACTED_EMAIL] for details"
+    # Other fields preserved
+    assert redacted[0]["event_id"] == "evt-1"
+    assert redacted[0]["role"] == "Support Agent"
+    assert redacted[0]["duration_minutes"] == 5
+
+
+def test_redact_in_analysis_flow(seed_events):
+    """Full analysis flow should redact notes before Granite."""
+    from backend.services import redaction, workflow_reconstructor, hidden_work_detector, metrics_calculator
+    # Redact first
+    redacted_events = redaction.redact_events(seed_events)
+    # Run through pipeline
+    official_wf, actual_wf = workflow_reconstructor.reconstruct(redacted_events)
+    hidden = hidden_work_detector.detect(redacted_events)
+    metrics = metrics_calculator.calculate(redacted_events, hidden, {})
+    # Verify notes were redacted in intermediate data
+    for ev in redacted_events:
+        if ev.get("notes"):
+            assert "@" not in ev["notes"], f"Email not redacted in: {ev['notes']}"

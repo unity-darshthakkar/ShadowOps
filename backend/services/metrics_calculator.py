@@ -8,6 +8,11 @@ from backend.models.schemas import AnalysisMetrics, OverheadAssumption
 from backend.services.hidden_work_detector import HIDDEN_WORK_TYPES
 
 # ---------------------------------------------------------------------------
+# Event type categorisation
+# ---------------------------------------------------------------------------
+WAITING_TYPES: frozenset[str] = frozenset({"waiting"})
+
+# ---------------------------------------------------------------------------
 # Fallback defaults (used when automation_proposal field is absent)
 # ---------------------------------------------------------------------------
 OVERHEAD_DEFAULTS: dict[str, float] = {
@@ -84,8 +89,11 @@ def calculate(
         if ev["event_type"] in OFFICIAL_STEP_TYPES
     )
 
-    # Routine events = everything except hidden work (includes waiting)
-    routine_events = [ev for ev in events if ev["event_type"] not in HIDDEN_WORK_TYPES]
+    # Routine events = everything except hidden work AND waiting
+    routine_events = [
+        ev for ev in events
+        if ev["event_type"] not in HIDDEN_WORK_TYPES and ev["event_type"] not in WAITING_TYPES
+    ]
     routine_count = len(routine_events)
     routine_total = sum(float(ev.get("duration_minutes", 0)) for ev in routine_events)
 
@@ -139,7 +147,7 @@ def calculate(
     hidden_by_role: dict[str, float] = {}
     for ev in events:
         if ev["event_type"] in HIDDEN_WORK_TYPES:
-            role = ev.get("agent_id", "unknown")
+            role = ev.get("role", ev.get("agent_id", "unknown"))
             hidden_by_role[role] = hidden_by_role.get(role, 0.0) + float(
                 ev.get("duration_minutes", 0)
             )

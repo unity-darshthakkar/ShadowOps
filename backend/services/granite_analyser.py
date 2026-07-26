@@ -8,26 +8,78 @@ import logging
 import re
 
 from backend.config import Settings
-from backend.models.schemas import AnalysisMetrics, GraniteOutput, HiddenWorkSummary
+from backend.models.schemas import AnalysisMetrics, GraniteOutput, HiddenWorkSummary, WorkflowStep
 from backend.services import cached_provider
 
 logger = logging.getLogger(__name__)
 
 
-def build_prompt(metrics: AnalysisMetrics, hidden: HiddenWorkSummary) -> str:
-    official_steps = "ticket created → assigned → first response → resolution → closed"
-    actual_steps = ", ".join(hidden.hidden_event_types) or "none detected"
+def build_prompt(
+    metrics: AnalysisMetrics,
+    hidden: HiddenWorkSummary,
+    official_workflow: list[WorkflowStep],
+    actual_workflow: list[WorkflowStep],
+    proposal: dict,
+) -> str:
+    official_steps = " → ".join(s.label for s in official_workflow)
+    actual_steps = " → ".join(s.label for s in actual_workflow)
+    hidden_types = ", ".join(hidden.hidden_event_types) or "none detected"
+
+    # Format overhead components
+    overhead_lines = [
+        f"  - Review overhead: {metrics.review_overhead:.1f} min",
+        f"  - Correction overhead: {metrics.correction_overhead:.1f} min",
+        f"  - Exception-handling overhead: {metrics.exception_overhead:.1f} min",
+        f"  - Maintenance overhead: {metrics.maintenance_overhead:.1f} min",
+        f"  - Failure-recovery overhead: {metrics.failure_recovery_overhead:.1f} min",
+    ]
+    overhead_text = "\n".join(overhead_lines)
+
+    # Format assumption flags
+    assumption_lines = []
+    for a in metrics.overhead_assumptions:
+        src = "from proposal" if a.source == "proposal" else f"DEFAULT ({a.default_value})"
+        assumption_lines.append(f"  - {a.field}: {a.value} ({src})")
+    assumption_text = "\n".join(assumption_lines) if assumption_lines else "  (none)"
+
+    # Hidden work evidence summary
+    evidence_lines = []
+    for ev in hidden.evidence[:5]:  # top 5 for brevity
+        evidence_lines.append(f"  - {ev.event_id}: {ev.description}")
+    if len(hidden.evidence) > 5:
+        evidence_lines.append(f"  - ... and {len(hidden.evidence) - 5} more")
+    evidence_text = "\n".join(evidence_lines) if evidence_lines else "  (none)"
+
+    # Fallback gaps
+    fallback_gaps = metrics.missing_fallback_count
+    fallback_text = f"{fallback_gaps} automated step(s) lack fallback procedures" if fallback_gaps > 0 else "All automated steps have fallback procedures"
 
     return f"""You are a workflow design expert. Analyse the following workflow data and respond ONLY
 with valid JSON matching the schema below. Do not include any text outside the JSON object.
 
 WORKFLOW DATA:
-- Official steps: {official_steps}
-- Hidden-work types detected: {actual_steps}
+- Official workflow steps ({len(official_workflow)}): {official_steps}
+- Actual workflow steps ({len(actual_workflow)}): {actual_steps}
+- Hidden-work types detected: {hidden_types}
 - Hidden work ratio: {metrics.hidden_work_ratio:.0%}
+- Total hidden work: {metrics.hidden_work_ratio * 100:.0f}% of actual time
+- Burden concentration: {metrics.burden_concentration:.0%} (max hidden work on single role)
+
+AI OVERHEAD BREAKDOWN:
+{overhead_text}
+
+OVERHEAD ASSUMPTIONS (source):
+{assumption_text}
+
+HIDDEN WORK EVIDENCE (sample):
+{evidence_text}
+
+KEY METRICS:
+- AI Tax: {metrics.ai_tax:.0%} (overhead / gross time saved)
 - Net time saved with AI: {metrics.net_time_saved:.0f} minutes
-- Automation readiness: {metrics.automation_readiness_label}
+- Automation readiness: {metrics.automation_readiness_label} ({metrics.automation_readiness:.0%})
 - Skill-loss risk: {metrics.skill_loss_risk}
+- Fallback gaps: {fallback_text}
 
 RESPOND WITH THIS EXACT JSON STRUCTURE:
 {{
@@ -108,10 +160,13 @@ def analyse(
     metrics: AnalysisMetrics,
     hidden: HiddenWorkSummary,
     settings: Settings,
+    official_workflow: list[WorkflowStep],
+    actual_workflow: list[WorkflowStep],
+    proposal: dict,
 ) -> GraniteOutput:
     """Entry point: use live Granite if credentials are present, else cached demo."""
     if not settings.has_watsonx_credentials:
         logger.info("No watsonx credentials configured; using cached demo provider.")
         return cached_provider.get()
-    prompt = build_prompt(metrics, hidden)
+    prompt = build_prompt(metrics, hidden, official_workflow, actual_workflow, proposal)
     return call_granite(prompt, settings)
