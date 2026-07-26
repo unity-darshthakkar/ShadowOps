@@ -296,48 +296,169 @@ def test_provider_fallback_on_missing_credentials():
     assert result.provider == "cached_demo"
 
 
-def test_provider_fallback_on_invalid_json(monkeypatch):
-    """call_granite must fall back when SDK returns unparseable text."""
-    from backend.services.granite_analyser import call_granite
-    from backend.config import Settings
+def _fake_sdk_modules(monkeypatch, chat_side_effect=None, chat_return=None):
+    """
+    Inject fake ibm_watsonx_ai SDK modules into sys.modules.
+    chat_side_effect: if set, calling chat() raises this exception.
+    chat_return: if set, chat() returns this value.
+    Returns the FakeModelInference class for inspection.
+    """
+    import sys, types
 
-    settings = Settings(
+    class FakeCredentials:
+        def __init__(self, api_key=None, url=None): pass
+
+    class FakeModelInference:
+        _instances: list["FakeModelInference"] = []
+
+        def __init__(self, model_id=None, credentials=None, project_id=None, **kwargs):
+            self.model_id = model_id
+            self.credentials = credentials
+            self.project_id = project_id
+            FakeModelInference._instances.append(self)
+
+        def chat(self, messages=None, params=None, **kwargs):
+            if chat_side_effect is not None:
+                raise chat_side_effect
+            return chat_return
+
+        # Ensure generate_text is not present on the fake — tests assert it is never called
+        # (deliberately omitted)
+
+    fake_sdk = types.ModuleType("ibm_watsonx_ai")
+    fake_sdk.Credentials = FakeCredentials
+    monkeypatch.setitem(sys.modules, "ibm_watsonx_ai", fake_sdk)
+
+    fake_fm = types.ModuleType("ibm_watsonx_ai.foundation_models")
+    fake_fm.ModelInference = FakeModelInference
+    monkeypatch.setitem(sys.modules, "ibm_watsonx_ai.foundation_models", fake_fm)
+
+    return FakeModelInference
+
+
+def _make_chat_response(content: str) -> dict:
+    """Build a minimal chat response dict matching the expected structure."""
+    return {"choices": [{"message": {"content": content}}]}
+
+
+def _settings_with_creds() -> "Settings":
+    from backend.config import Settings
+    return Settings(
         watsonx_api_key="fake-key",
         watsonx_url="https://fake.example.com",
         watsonx_project_id="fake-project",
+        watsonx_model_id="ibm/granite-4-h-small",
     )
 
-    # Mock the SDK so it raises on import/instantiation
-    import sys
-    class FakeModelInference:
-        def __init__(self, **kwargs): pass
-        def generate_text(self, **kwargs): return "this is not json {{{"
 
-    import types
-    fake_module = types.ModuleType("ibm_watsonx_ai.foundation_models")
-    fake_module.ModelInference = FakeModelInference
-    monkeypatch.setitem(sys.modules, "ibm_watsonx_ai.foundation_models", fake_module)
+def _valid_granite_json() -> str:
+    """Minimal valid JSON that passes GraniteOutput schema validation."""
+    return json.dumps({
+        "workflow_gap_narrative": "Test gap narrative.",
+        "hidden_work_narrative": "Test hidden work narrative.",
+        "redesign_recommendations": ["Rec 1", "Rec 2", "Rec 3"],
+        "guardrails": [
+            {
+                "id": "human-approval",
+                "label": "Human Approval",
+                "type": "human_approval",
+                "description": "Require human approval on AI resolutions.",
+            }
+        ],
+        "safer_workflow_steps": [
+            {
+                "step_id": "ticket-created",
+                "label": "Ticket Created",
+                "executor": "ai",
+                "requires_approval": False,
+                "fallback_procedure": "Manual intake if AI unavailable.",
+                "confidence_threshold": None,
+            }
+        ],
+        "provider": "live_granite",
+    })
 
-    # Also mock metanames
-    fake_meta = types.ModuleType("ibm_watsonx_ai.metanames")
-    class FakeParams:
-        MAX_NEW_TOKENS = "max_new_tokens"
-        TEMPERATURE = "temperature"
-        TOP_P = "top_p"
-    fake_meta.GenTextParamsMetaNames = FakeParams
-    monkeypatch.setitem(sys.modules, "ibm_watsonx_ai.metanames", fake_meta)
 
-    import pathlib, json
-    path = pathlib.Path(__file__).parent.parent / "data" / "seed_scenarios.json"
-    with open(path) as f:
-        scenario = json.load(f)
-    events = scenario["events"]
-    proposal = scenario.get("automation_proposal", {})
-    summary = detect(events)
-    metrics = calculate(events, summary, proposal)
+def test_provider_fallback_on_invalid_json(monkeypatch):
+    """call_granite falls back to cached_demo when chat() returns unparseable content."""
+    from backend.services.granite_analyser import call_granite
 
-    result = call_granite("some prompt", settings)
+    _fake_sdk_modules(
+        monkeypatch,
+        chat_return=_make_chat_response("this is not json {{{"),
+    )
+    result = call_granite("some prompt", _settings_with_creds())
     assert result.provider == "cached_demo"
+
+
+def test_provider_chat_valid_json_returns_live_granite(monkeypatch):
+    """call_granite returns live_granite when chat() returns valid JSON."""
+    from backend.services.granite_analyser import call_granite
+
+    _fake_sdk_modules(
+        monkeypatch,
+        chat_return=_make_chat_response(_valid_granite_json()),
+    )
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "live_granite"
+    assert result.workflow_gap_narrative == "Test gap narrative."
+
+
+def test_provider_chat_api_exception_falls_back(monkeypatch):
+    """call_granite falls back to cached_demo when chat() raises any exception."""
+    from backend.services.granite_analyser import call_granite
+
+    _fake_sdk_modules(
+        monkeypatch,
+        chat_side_effect=RuntimeError("connection timeout"),
+    )
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "cached_demo"
+
+
+def test_generate_text_not_called(monkeypatch):
+    """The deprecated generate_text method is never invoked."""
+    from backend.services.granite_analyser import call_granite
+    import sys
+
+    FakeModelInference = _fake_sdk_modules(
+        monkeypatch,
+        chat_return=_make_chat_response(_valid_granite_json()),
+    )
+    # Add a sentinel generate_text that fails if called
+    generate_text_called = []
+    original_class = FakeModelInference
+    original_chat = original_class.chat
+
+    def _fail_if_called(self, **kwargs):
+        generate_text_called.append(True)
+        raise AssertionError("generate_text must not be called")
+
+    original_class.generate_text = _fail_if_called
+
+    call_granite("some prompt", _settings_with_creds())
+    assert not generate_text_called, "generate_text was called but must not be"
+
+
+def test_credentials_not_in_log(monkeypatch, caplog):
+    """API key and URL must never appear in log output."""
+    import logging
+    from backend.services.granite_analyser import call_granite
+
+    _fake_sdk_modules(
+        monkeypatch,
+        chat_return=_make_chat_response(_valid_granite_json()),
+    )
+    settings = _settings_with_creds()
+
+    with caplog.at_level(logging.DEBUG, logger="backend.services.granite_analyser"):
+        call_granite("some prompt", settings)
+
+    full_log = caplog.text
+    assert settings.watsonx_api_key not in full_log, "API key must not appear in logs"
+    # URL in logs only as part of model/project identification is acceptable,
+    # but the raw credential value "fake-key" must not appear
+    assert "fake-key" not in full_log
 
 
 # ---------------------------------------------------------------------------
@@ -357,13 +478,13 @@ def test_granite_prompt_includes_workflows_and_overhead(seed_events, full_propos
     prompt = build_prompt(metrics, summary, official_wf, actual_wf, full_proposal)
 
     # Workflows
-    assert "Official workflow steps" in prompt
-    assert "Actual workflow steps" in prompt
+    assert "OFFICIAL WORKFLOW" in prompt
+    assert "ACTUAL WORKFLOW" in prompt
     assert "Ticket Created" in prompt  # step label appears
     assert "Assigned" in prompt
 
     # Hidden work
-    assert "Hidden-work types detected" in prompt
+    assert "HIDDEN-WORK TYPES DETECTED" in prompt
     assert "follow_up" in prompt or "manual_status_check" in prompt
 
     # Overhead breakdown (all 5 components)
@@ -374,7 +495,7 @@ def test_granite_prompt_includes_workflows_and_overhead(seed_events, full_propos
     assert "Failure-recovery overhead" in prompt
 
     # Assumptions provenance
-    assert "OVERHEAD ASSUMPTIONS" in prompt
+    assert "OVERHEAD INPUT ASSUMPTIONS" in prompt
     assert "from proposal" in prompt or "DEFAULT" in prompt
 
     # Evidence

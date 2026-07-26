@@ -1,100 +1,107 @@
 """
-Deterministic PII redaction for free-text notes before live Granite inference.
-Redacts email addresses and likely personal names.
-Preserves anonymous event IDs, ticket IDs, workflow labels, and role names.
+PII redaction utilities for ShadowOps.
+
+Applies lightweight pattern-based redaction to free-text fields (event notes)
+before they are passed to IBM Granite or stored in responses.
+
+Preserves:
+  - Ticket IDs: TKT-\d+, TKT-\w+
+  - Event IDs: evt-\w+
+  - Agent IDs: agent-\w+
+  - Role names: Support Agent, Senior Support Agent, Operations Specialist, Team Lead
+  - Workflow labels: Ticket Created, First Response, etc. (title-cased workflow terms)
+
+Redacts:
+  - Email addresses → [REDACTED_EMAIL]
+  - Likely personal names (Title Case two-word sequences not in the allow-list) → [REDACTED_NAME]
+
+Strategy: protect multi-word terms first by temporarily substituting them, then
+redact remaining bare title-case pairs, then restore the substitutions.
 """
 from __future__ import annotations
 import re
-from typing import Any
+import copy
 
-EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b")
-# Common first names that might appear in synthetic data
-COMMON_NAMES = {
-    "john", "jane", "alex", "sam", "chris", "pat", "taylor", "morgan",
-    "jordan", "casey", "riley", "avery", "quinn", "dakota", "payton",
-    "jesse", "marion", "leslie", "francis", "kelly", "ashley", "dana"
-}
-NAME_RE = re.compile(r"\b([A-Z][a-z]+)\s+([A-Z][a-z]+)\b")
+# ---------------------------------------------------------------------------
+# Compiled patterns
+# ---------------------------------------------------------------------------
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+# Title-case two-word sequences that are candidates for name-redaction
+_TITLE_CASE_PAIR_RE = re.compile(r"\b([A-Z][a-z]+)\s+([A-Z][a-z]+)\b")
+
+# Protected phrases — sorted longest-first so longer phrases are matched preferentially
+_PROTECTED_TERMS: list[str] = sorted(
+    [
+        "Senior Support Agent",
+        "Support Agent",
+        "Operations Specialist",
+        "Team Lead",
+        "Ticket Created",
+        "First Response",
+        "Manual Status Check",
+        "Context Repair",
+        "Duplicate Entry",
+        "Exception Handling",
+        "Manual Reconciliation",
+        "Follow Up",
+        "Ticket Resolution",
+    ],
+    key=len,
+    reverse=True,
+)
+
+# Prefixes that indicate IDs rather than personal names
+_ID_PREFIX_RE = re.compile(r"^(agent|evt|tkt|tkid)-", re.IGNORECASE)
+
 
 def redact_text(text: str) -> str:
     """
-    Redact PII from a single text string.
-    Returns redacted text with [REDACTED_EMAIL] and [REDACTED_NAME] markers.
+    Redact PII patterns from a single text string.
+    Preserves ticket IDs, event IDs, agent IDs, role names, and workflow labels.
     """
-    if not text:
-        return text
+    # 1. Redact emails first (unambiguous)
+    text = _EMAIL_RE.sub("[REDACTED_EMAIL]", text)
 
-    # Redact email addresses
-    text = EMAIL_RE.sub("[REDACTED_EMAIL]", text)
+    # 2. Temporarily replace protected multi-word phrases with numbered tokens
+    #    so they survive the name-redaction pass.
+    saved: list[str] = []
+    for phrase in _PROTECTED_TERMS:
+        if phrase in text:
+            token = f"\x00PROTECTED{len(saved)}\x00"
+            text = text.replace(phrase, token)
+            saved.append(phrase)
 
-    # Preserve known workflow labels and role names before name redaction
-    # These are known system terms that should NOT be redacted
-    PRESERVED_TERMS = {
-        "Ticket Created", "Ticket Updated", "Assigned", "Acknowledged",
-        "In Progress", "Under Review", "Resolved", "Closed", "Reopened",
-        "Escalated", "Waiting", "On Hold", "Reassigned",
-        "Support Agent", "Senior Agent", "Team Lead", "Operations Specialist",
-        "Customer Reports", "Agent Manually", "Manual Status Check",
-        "Context Repair", "Duplicate Entry", "Rework", "Exception Handling",
-        "Escalation", "Manual Reconciliation", "Follow Up",
-    }
-
-    # Temporarily replace preserved terms with placeholders
-    placeholders = {}
-    for i, term in enumerate(PRESERVED_TERMS):
-        if term in text:
-            placeholder = f"__PRESERVED_{i}__"
-            placeholders[placeholder] = term
-            text = text.replace(term, placeholder)
-
-    # Also preserve "evt-" and "TKT-" prefixed IDs
-    for match in re.finditer(r'\b(TKT-\w+|evt-\w+|agent-\w+)\b', text):
-        placeholder = f"__PRESERVED_ID_{len(placeholders)}__"
-        placeholders[placeholder] = match.group(0)
-        text = text.replace(match.group(0), placeholder)
-
-    # Redact likely personal names (two capitalized words)
-    def replace_name(match: re.Match) -> str:
-        first, last = match.group(1), match.group(2)
+    # 3. Redact remaining bare title-case pairs that are not IDs
+    def _maybe_redact_name(m: re.Match) -> str:
+        # Skip if it looks like an ID token (starts with \x00)
+        if m.group(0).startswith("\x00"):
+            return m.group(0)
+        # Skip if either word looks like an ID-prefixed token
+        if _ID_PREFIX_RE.match(m.group(1)) or _ID_PREFIX_RE.match(m.group(2)):
+            return m.group(0)
         return "[REDACTED_NAME]"
 
-    text = NAME_RE.sub(replace_name, text)
+    text = _TITLE_CASE_PAIR_RE.sub(_maybe_redact_name, text)
 
-    # Restore preserved terms
-    for placeholder, original in placeholders.items():
-        text = text.replace(placeholder, original)
+    # 4. Restore protected phrases
+    for i, phrase in enumerate(saved):
+        text = text.replace(f"\x00PROTECTED{i}\x00", phrase)
 
     return text
 
 
-def redact_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def redact_events(events: list[dict]) -> list[dict]:
     """
-    Create a copy of events with notes redacted.
-    Does not modify the original events list.
+    Return a deep copy of the event list with PII redacted from the 'notes' field.
+    Does not modify the original list or any other field.
     """
-    redacted = []
+    redacted: list[dict] = []
     for ev in events:
-        ev_copy = ev.copy()
-        if "notes" in ev_copy and ev_copy["notes"]:
-            ev_copy["notes"] = redact_text(ev_copy["notes"])
+        ev_copy = copy.copy(ev)
+        notes = ev_copy.get("notes", "")
+        if notes:
+            ev_copy["notes"] = redact_text(notes)
         redacted.append(ev_copy)
     return redacted
-
-
-def redact_granite_prompt_data(
-    official_workflow: list[Any],
-    actual_workflow: list[Any],
-    hidden_evidence: list[Any],
-    metrics: Any,
-    proposal: dict[str, Any],
-) -> tuple[list[Any], list[Any], list[Any], Any, dict[str, Any]]:
-    """
-    Redact PII from data passed to Granite prompt builder.
-    Returns redacted copies of all inputs.
-    """
-    # Events are not passed directly to build_prompt anymore,
-    # but the hidden evidence and workflows might contain notes.
-    # For now, we just return deep copies since the prompt uses
-    # structured fields (labels, descriptions) not raw notes.
-    # The main redaction happens at the event level before analysis.
-    return official_workflow, actual_workflow, hidden_evidence, metrics, proposal.copy()
