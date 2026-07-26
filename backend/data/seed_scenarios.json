@@ -1,0 +1,484 @@
+{
+  "scenario_id": "cs-demo-v1",
+  "name": "Customer Support Ticket Lifecycle",
+  "description": "Synthetic 30-day sample of customer-support ticket activity. All actor IDs are anonymous. No personal information is included.",
+  "official_workflow": [
+    "ticket_created",
+    "assigned",
+    "first_response",
+    "resolution",
+    "closed"
+  ],
+  "automation_proposal": {
+    "expected_review_rate": 0.15,
+    "avg_review_minutes": 3.0,
+    "expected_correction_rate": 0.08,
+    "avg_correction_minutes": 8.0,
+    "exception_rate": 0.05,
+    "avg_exception_handling_minutes": 20.0,
+    "weekly_maintenance_minutes": 45.0,
+    "expected_failure_recovery_minutes": 30.0
+  },
+  "events": [
+    {
+      "event_id": "evt-001",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "ticket_created",
+      "timestamp": "2024-06-01T09:00:00Z",
+      "duration_minutes": 2,
+      "notes": "Customer reports login failure after password reset.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-002",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "assigned",
+      "timestamp": "2024-06-01T09:05:00Z",
+      "duration_minutes": 1,
+      "notes": "Ticket routed to tier-1 queue.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-003",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "manual_status_check",
+      "timestamp": "2024-06-01T11:30:00Z",
+      "duration_minutes": 3,
+      "notes": "Agent manually checked CRM to verify ticket had not been resolved by another channel.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-004",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "first_response",
+      "timestamp": "2024-06-01T12:00:00Z",
+      "duration_minutes": 8,
+      "notes": "Sent password reset instructions and asked customer to confirm attempt.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-005",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "waiting",
+      "timestamp": "2024-06-01T12:08:00Z",
+      "duration_minutes": 120,
+      "notes": "Awaiting customer reply. No agent action during this period.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-006",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "follow_up",
+      "timestamp": "2024-06-01T15:00:00Z",
+      "duration_minutes": 4,
+      "notes": "Customer did not reply; agent sent a follow-up message.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-007",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "context_repair",
+      "timestamp": "2024-06-01T15:10:00Z",
+      "duration_minutes": 6,
+      "notes": "Previous ticket notes were incomplete; agent reconstructed context from email thread.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-008",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "resolution",
+      "timestamp": "2024-06-02T09:00:00Z",
+      "duration_minutes": 10,
+      "notes": "Customer confirmed login restored after second reset attempt.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-009",
+      "ticket_id": "TKT-1001",
+      "agent_id": "agent-A",
+      "event_type": "closed",
+      "timestamp": "2024-06-02T09:10:00Z",
+      "duration_minutes": 1,
+      "notes": "Ticket closed.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-010",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "ticket_created",
+      "timestamp": "2024-06-03T10:00:00Z",
+      "duration_minutes": 2,
+      "notes": "Customer reports billing discrepancy on invoice #4821.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-011",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "assigned",
+      "timestamp": "2024-06-03T10:03:00Z",
+      "duration_minutes": 1,
+      "notes": "Routed to billing queue.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-012",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "duplicate_entry",
+      "timestamp": "2024-06-03T10:10:00Z",
+      "duration_minutes": 5,
+      "notes": "Same billing issue logged twice across two systems; agent merged records manually.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-013",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "first_response",
+      "timestamp": "2024-06-03T10:30:00Z",
+      "duration_minutes": 9,
+      "notes": "Acknowledged billing dispute and requested supporting documents.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-014",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "escalation",
+      "timestamp": "2024-06-03T14:00:00Z",
+      "duration_minutes": 12,
+      "notes": "Customer dissatisfied with initial response; case escalated to billing supervisor.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-015",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "rework",
+      "timestamp": "2024-06-04T09:00:00Z",
+      "duration_minutes": 15,
+      "notes": "Calculation error found in billing adjustment; agent redid the calculation.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-016",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "resolution",
+      "timestamp": "2024-06-04T11:00:00Z",
+      "duration_minutes": 10,
+      "notes": "Credit issued. Customer confirmed satisfaction.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-017",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "manual_reconciliation",
+      "timestamp": "2024-06-04T11:15:00Z",
+      "duration_minutes": 8,
+      "notes": "Agent reconciled CRM, billing system, and audit log to ensure all three showed the same credit amount.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-018",
+      "ticket_id": "TKT-1002",
+      "agent_id": "agent-B",
+      "event_type": "closed",
+      "timestamp": "2024-06-04T11:25:00Z",
+      "duration_minutes": 1,
+      "notes": "Ticket closed after reconciliation confirmed.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-019",
+      "ticket_id": "TKT-1003",
+      "agent_id": "agent-C",
+      "event_type": "ticket_created",
+      "timestamp": "2024-06-05T08:30:00Z",
+      "duration_minutes": 2,
+      "notes": "Customer cannot access the mobile app after OS update.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-020",
+      "ticket_id": "TKT-1003",
+      "agent_id": "agent-C",
+      "event_type": "assigned",
+      "timestamp": "2024-06-05T08:33:00Z",
+      "duration_minutes": 1,
+      "notes": "Assigned to mobile support queue.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-021",
+      "ticket_id": "TKT-1003",
+      "agent_id": "agent-C",
+      "event_type": "exception_handling",
+      "timestamp": "2024-06-05T09:00:00Z",
+      "duration_minutes": 25,
+      "notes": "App behaviour on new OS version falls outside standard scripts; agent escalated to engineering.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-022",
+      "ticket_id": "TKT-1003",
+      "agent_id": "agent-C",
+      "event_type": "first_response",
+      "timestamp": "2024-06-05T10:00:00Z",
+      "duration_minutes": 7,
+      "notes": "Sent workaround steps pending a patch release.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-023",
+      "ticket_id": "TKT-1003",
+      "agent_id": "agent-C",
+      "event_type": "follow_up",
+      "timestamp": "2024-06-06T09:00:00Z",
+      "duration_minutes": 3,
+      "notes": "Customer had not confirmed workaround; agent followed up.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-024",
+      "ticket_id": "TKT-1003",
+      "agent_id": "agent-C",
+      "event_type": "manual_status_check",
+      "timestamp": "2024-06-06T10:00:00Z",
+      "duration_minutes": 4,
+      "notes": "Checked engineering queue status for patch ETA.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-025",
+      "ticket_id": "TKT-1003",
+      "agent_id": "agent-C",
+      "event_type": "resolution",
+      "timestamp": "2024-06-07T14:00:00Z",
+      "duration_minutes": 5,
+      "notes": "Patch released; customer confirmed app working.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-026",
+      "ticket_id": "TKT-1003",
+      "agent_id": "agent-C",
+      "event_type": "closed",
+      "timestamp": "2024-06-07T14:06:00Z",
+      "duration_minutes": 1,
+      "notes": "Ticket closed.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-027",
+      "ticket_id": "TKT-1004",
+      "agent_id": "agent-A",
+      "event_type": "ticket_created",
+      "timestamp": "2024-06-10T11:00:00Z",
+      "duration_minutes": 2,
+      "notes": "Customer requests a refund for a duplicate charge.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-028",
+      "ticket_id": "TKT-1004",
+      "agent_id": "agent-A",
+      "event_type": "assigned",
+      "timestamp": "2024-06-10T11:04:00Z",
+      "duration_minutes": 1,
+      "notes": "Assigned to refund-processing queue.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-029",
+      "ticket_id": "TKT-1004",
+      "agent_id": "agent-A",
+      "event_type": "first_response",
+      "timestamp": "2024-06-10T11:30:00Z",
+      "duration_minutes": 6,
+      "notes": "Confirmed duplicate charge visible in payment history; initiated refund.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-030",
+      "ticket_id": "TKT-1004",
+      "agent_id": "agent-A",
+      "event_type": "context_repair",
+      "timestamp": "2024-06-10T11:40:00Z",
+      "duration_minutes": 7,
+      "notes": "Payment gateway reference numbers were not linked in CRM; agent manually cross-referenced.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-031",
+      "ticket_id": "TKT-1004",
+      "agent_id": "agent-A",
+      "event_type": "rework",
+      "timestamp": "2024-06-10T14:00:00Z",
+      "duration_minutes": 10,
+      "notes": "Refund submission failed due to form field mismatch; agent resubmitted with corrected data.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-032",
+      "ticket_id": "TKT-1004",
+      "agent_id": "agent-A",
+      "event_type": "resolution",
+      "timestamp": "2024-06-11T09:00:00Z",
+      "duration_minutes": 4,
+      "notes": "Refund confirmed processed by payment team.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-033",
+      "ticket_id": "TKT-1004",
+      "agent_id": "agent-A",
+      "event_type": "manual_reconciliation",
+      "timestamp": "2024-06-11T09:10:00Z",
+      "duration_minutes": 6,
+      "notes": "Agent reconciled CRM record, refund portal, and customer-facing account balance.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-034",
+      "ticket_id": "TKT-1004",
+      "agent_id": "agent-A",
+      "event_type": "closed",
+      "timestamp": "2024-06-11T09:18:00Z",
+      "duration_minutes": 1,
+      "notes": "Ticket closed.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-035",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "ticket_created",
+      "timestamp": "2024-06-15T13:00:00Z",
+      "duration_minutes": 2,
+      "notes": "Enterprise customer reports data export failing for large datasets.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-036",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "assigned",
+      "timestamp": "2024-06-15T13:05:00Z",
+      "duration_minutes": 1,
+      "notes": "Assigned to enterprise support queue.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-037",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "manual_status_check",
+      "timestamp": "2024-06-15T14:00:00Z",
+      "duration_minutes": 5,
+      "notes": "Agent checked server logs to determine if export jobs were queued.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-038",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "exception_handling",
+      "timestamp": "2024-06-15T14:15:00Z",
+      "duration_minutes": 30,
+      "notes": "Export failure caused by undocumented 10 GB size limit; no standard procedure exists.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-039",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "first_response",
+      "timestamp": "2024-06-15T15:00:00Z",
+      "duration_minutes": 8,
+      "notes": "Advised customer to split exports into batches as interim workaround.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-040",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "escalation",
+      "timestamp": "2024-06-16T09:00:00Z",
+      "duration_minutes": 15,
+      "notes": "Customer requires SLA-compliant fix; case escalated to product engineering.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-041",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "duplicate_entry",
+      "timestamp": "2024-06-16T10:00:00Z",
+      "duration_minutes": 4,
+      "notes": "Customer re-submitted ticket via a second channel; agent merged duplicate.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-042",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "waiting",
+      "timestamp": "2024-06-16T10:10:00Z",
+      "duration_minutes": 480,
+      "notes": "Awaiting engineering team response. No agent action during this period.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-043",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "follow_up",
+      "timestamp": "2024-06-17T09:00:00Z",
+      "duration_minutes": 5,
+      "notes": "Agent followed up with engineering on ticket progress.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-044",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "resolution",
+      "timestamp": "2024-06-18T14:00:00Z",
+      "duration_minutes": 12,
+      "notes": "Engineering released fix; export size limit raised. Customer confirmed.",
+      "is_hidden_work": false
+    },
+    {
+      "event_id": "evt-045",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "manual_reconciliation",
+      "timestamp": "2024-06-18T14:15:00Z",
+      "duration_minutes": 9,
+      "notes": "Agent reconciled engineering fix record with support ticket and SLA tracker.",
+      "is_hidden_work": true
+    },
+    {
+      "event_id": "evt-046",
+      "ticket_id": "TKT-1005",
+      "agent_id": "agent-B",
+      "event_type": "closed",
+      "timestamp": "2024-06-18T14:26:00Z",
+      "duration_minutes": 1,
+      "notes": "Ticket closed. SLA met.",
+      "is_hidden_work": false
+    }
+  ]
+}

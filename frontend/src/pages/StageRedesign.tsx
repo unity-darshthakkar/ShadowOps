@@ -1,0 +1,153 @@
+import { useNavigate } from 'react-router-dom'
+import { useAnalysis } from '../context/AnalysisContext'
+import ReportExport from '../components/ReportExport'
+import type { GuardrailType } from '../types/api'
+
+const GUARDRAIL_LABELS: Record<GuardrailType, string> = {
+  human_approval: 'Human Approval',
+  confidence_threshold: 'Confidence Threshold',
+  exception_routing: 'Exception Routing',
+  manual_fallback: 'Manual Fallback',
+  skill_preservation: 'Skill Preservation',
+  audit_trail: 'Audit Trail',
+}
+
+const EXECUTOR_COLORS: Record<string, string> = {
+  human: 'bg-blue-100 text-blue-800',
+  ai: 'bg-green-100 text-green-800',
+  hybrid: 'bg-purple-100 text-purple-800',
+}
+
+export default function StageRedesign() {
+  const { result } = useAnalysis()
+  const navigate = useNavigate()
+
+  if (!result || !result.granite_output) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 px-4 text-center">
+        <p className="text-gray-500">No analysis loaded. <button onClick={() => navigate('/')} className="text-blue-600 underline">Go to Setup</button></p>
+      </div>
+    )
+  }
+
+  const granite = result.granite_output
+  const { metrics } = result
+
+  // Group guardrails by type
+  const grouped = granite.guardrails.reduce<Record<GuardrailType, typeof granite.guardrails>>((acc, g) => {
+    if (!acc[g.type]) acc[g.type] = []
+    acc[g.type].push(g)
+    return acc
+  }, {} as Record<GuardrailType, typeof granite.guardrails>)
+
+  return (
+    <div className="max-w-5xl mx-auto py-8 px-4 space-y-10">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">Stage 4 — Safer Redesign</h2>
+        <p className="text-sm text-gray-500">Scenario: {result.scenario_id}</p>
+      </div>
+
+      {/* Section A — Safer workflow steps */}
+      <section className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="font-semibold text-gray-800 mb-4 text-lg">Proposed Safer Workflow</h3>
+        <ol className="space-y-3">
+          {granite.safer_workflow_steps.map((step, i) => (
+            <li key={step.step_id} className="flex items-start gap-3 border-b border-gray-100 pb-3">
+              <span className="text-gray-400 font-mono text-sm mt-0.5 w-5 shrink-0">{i + 1}.</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-gray-900">{step.label}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${EXECUTOR_COLORS[step.executor]}`}>
+                    {step.executor}
+                  </span>
+                  {step.requires_approval && (
+                    <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-xs font-semibold">
+                      Approval required
+                    </span>
+                  )}
+                  {step.confidence_threshold !== null && (
+                    <span className="text-xs text-gray-500">
+                      Confidence ≥ {(step.confidence_threshold * 100).toFixed(0)}%
+                    </span>
+                  )}
+                </div>
+                {step.fallback_procedure && (
+                  <p className="text-xs text-gray-500 mt-1">↳ Fallback: {step.fallback_procedure}</p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+        {metrics.missing_fallback_count > 0 && (
+          <p className="text-amber-700 text-sm mt-3 font-medium">
+            ⚠ {metrics.missing_fallback_count} automated step(s) have no fallback procedure defined.
+          </p>
+        )}
+      </section>
+
+      {/* Section B — Guardrails */}
+      <section className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="font-semibold text-gray-800 mb-4 text-lg">Guardrails</h3>
+        <div className="space-y-4">
+          {(Object.keys(GUARDRAIL_LABELS) as GuardrailType[]).map((type) => {
+            const items = grouped[type] ?? []
+            if (items.length === 0) return null
+            return (
+              <div key={type}>
+                <h4 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                  {GUARDRAIL_LABELS[type]}
+                </h4>
+                {items.map((g) => (
+                  <div key={g.id} className="ml-3 border-l-2 border-gray-200 pl-3 mb-2">
+                    <p className="font-medium text-gray-800 text-sm">{g.label}</p>
+                    <p className="text-xs text-gray-600">{g.description}</p>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* Section C — Redesign recommendations */}
+      <section className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <h3 className="font-semibold text-gray-800 mb-3 text-lg">Redesign Recommendations</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          {granite.provider === 'live_granite' ? '🟢 Generated by IBM Granite' : '🟡 From cached demonstration data'}
+        </p>
+        <ul className="space-y-2">
+          {granite.redesign_recommendations.map((r, i) => (
+            <li key={i} className="flex gap-2 text-sm text-gray-700">
+              <span className="text-blue-600 font-bold shrink-0">→</span>
+              {r}
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="text-xs font-semibold text-gray-600 mb-2">Workflow Gap Analysis</p>
+          <p className="text-sm text-gray-700 mb-3">{granite.workflow_gap_narrative}</p>
+          <p className="text-xs font-semibold text-gray-600 mb-2">Hidden Work Patterns</p>
+          <p className="text-sm text-gray-700">{granite.hidden_work_narrative}</p>
+        </div>
+      </section>
+
+      {/* Section D — Export + Disclaimer */}
+      <section className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+        <div className="text-xs text-gray-600 italic border-l-4 border-gray-300 pl-4 mb-4">
+          {result.disclaimer}
+        </div>
+        <ReportExport result={result} />
+        <p className="text-xs text-gray-500 mt-2">
+          Exports the complete analysis as a JSON preflight report.
+        </p>
+      </section>
+
+      <div className="flex justify-start">
+        <button onClick={() => navigate('/ai-impact')} className="border border-gray-300 text-gray-700 font-semibold px-5 py-2 rounded-lg hover:bg-gray-50">
+          ← Back
+        </button>
+      </div>
+    </div>
+  )
+}

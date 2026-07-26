@@ -1,0 +1,12 @@
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+sqlalchemy>=2.0.0
+httpx>=0.24.0
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+anyio>=4.0.0
+# ibm-watsonx-ai is optional for live Granite; install separately with:
+#   pip install ibm-watsonx-ai
+# When absent, the application automatically uses CachedDemoProvider.
