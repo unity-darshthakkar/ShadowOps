@@ -126,6 +126,8 @@ These values are deterministic and based on the supplied scenario.
 
 ## Architecture
 
+![ShadowOps architecture](docs/architecture/shadowops-architecture.png)
+
 ```text
 ┌───────────────────────────────┐
 │ React + TypeScript Frontend   │
