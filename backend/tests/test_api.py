@@ -266,8 +266,9 @@ def test_cached_provider_passes_schema_validation():
     output = cached_get()
     assert isinstance(output, GraniteOutput)
     assert output.provider == "cached_demo"
-    assert len(output.redesign_recommendations) >= 3
-    assert len(output.guardrails) >= 6
+    assert len(output.redesign_recommendations) >= 5
+    assert len(output.guardrails) >= 5
+    assert len(output.safer_workflow_steps) >= 6
 
 
 def test_provider_fallback_on_missing_credentials():
@@ -351,32 +352,58 @@ def _settings_with_creds() -> "Settings":
     )
 
 
-def _valid_granite_json() -> str:
-    """Minimal valid JSON that passes GraniteOutput schema validation."""
-    return json.dumps({
+def _complete_granite_payload() -> dict:
+    """Full valid payload that passes both schema and completeness validation."""
+    return {
         "workflow_gap_narrative": "Test gap narrative.",
         "hidden_work_narrative": "Test hidden work narrative.",
-        "redesign_recommendations": ["Rec 1", "Rec 2", "Rec 3"],
+        "redesign_recommendations": [
+            "Rec 1", "Rec 2", "Rec 3", "Rec 4", "Rec 5",
+        ],
         "guardrails": [
-            {
-                "id": "human-approval",
-                "label": "Human Approval",
-                "type": "human_approval",
-                "description": "Require human approval on AI resolutions.",
-            }
+            {"id": "human-approval-res", "label": "Human Approval", "type": "human_approval",
+             "description": "Require human approval on AI resolutions."},
+            {"id": "confidence-threshold-resp", "label": "Response Confidence", "type": "confidence_threshold",
+             "description": "Block responses below 0.80 confidence."},
+            {"id": "exception-routing-esc", "label": "Exception Routing", "type": "exception_routing",
+             "description": "Route exceptions to senior agent."},
+            {"id": "manual-fallback-outage", "label": "Manual Fallback", "type": "manual_fallback",
+             "description": "Revert to manual workflow on AI outage."},
+            {"id": "skill-preservation-rot", "label": "Skill Preservation", "type": "skill_preservation",
+             "description": "Rotate agents through manual processing quarterly."},
+            {"id": "audit-trail-all", "label": "Full Audit Trail", "type": "audit_trail",
+             "description": "Log every AI action and override."},
         ],
         "safer_workflow_steps": [
-            {
-                "step_id": "ticket-created",
-                "label": "Ticket Created",
-                "executor": "ai",
-                "requires_approval": False,
-                "fallback_procedure": "Manual intake if AI unavailable.",
-                "confidence_threshold": None,
-            }
+            {"step_id": "ticket-created", "label": "Ticket Created", "executor": "ai",
+             "requires_approval": False, "fallback_procedure": "Manual intake if AI unavailable.",
+             "confidence_threshold": None},
+            {"step_id": "assigned", "label": "Assigned", "executor": "ai",
+             "requires_approval": False, "fallback_procedure": "Agent manually routes ticket.",
+             "confidence_threshold": 0.85},
+            {"step_id": "first-response", "label": "First Response", "executor": "hybrid",
+             "requires_approval": True, "fallback_procedure": "Agent writes manually if threshold unmet.",
+             "confidence_threshold": 0.80},
+            {"step_id": "exception-check", "label": "Exception Check", "executor": "hybrid",
+             "requires_approval": True, "fallback_procedure": "Senior agent handles via escalation procedure.",
+             "confidence_threshold": 0.75},
+            {"step_id": "resolution", "label": "Resolution", "executor": "hybrid",
+             "requires_approval": True, "fallback_procedure": "Agent resolves manually.",
+             "confidence_threshold": 0.80},
+            {"step_id": "auto-reconciliation", "label": "Automated Reconciliation", "executor": "ai",
+             "requires_approval": False, "fallback_procedure": "Agent reconciles CRM manually.",
+             "confidence_threshold": None},
+            {"step_id": "closed", "label": "Closed", "executor": "human",
+             "requires_approval": False, "fallback_procedure": None,
+             "confidence_threshold": None},
         ],
         "provider": "live_granite",
-    })
+    }
+
+
+def _valid_granite_json() -> str:
+    """Complete valid JSON that passes GraniteOutput schema and completeness validation."""
+    return json.dumps(_complete_granite_payload())
 
 
 def test_provider_fallback_on_invalid_json(monkeypatch):
@@ -459,6 +486,198 @@ def test_credentials_not_in_log(monkeypatch, caplog):
     # URL in logs only as part of model/project identification is acceptable,
     # but the raw credential value "fake-key" must not appear
     assert "fake-key" not in full_log
+
+
+# ---------------------------------------------------------------------------
+# Completeness validation and fallback tests
+# ---------------------------------------------------------------------------
+
+def test_complete_live_output_returns_live_granite(monkeypatch):
+    """Complete valid live output retains provider=live_granite (does NOT fall back)."""
+    from backend.services.granite_analyser import call_granite
+
+    _fake_sdk_modules(
+        monkeypatch,
+        chat_return=_make_chat_response(_valid_granite_json()),
+    )
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "live_granite"
+
+
+def test_fewer_than_5_recommendations_falls_back(monkeypatch):
+    """Fewer than 5 redesign_recommendations triggers Pydantic ValidationError → cached_demo."""
+    from backend.services.granite_analyser import call_granite
+
+    payload = _complete_granite_payload()
+    payload["redesign_recommendations"] = ["Rec 1", "Rec 2", "Rec 3"]  # only 3
+    _fake_sdk_modules(monkeypatch, chat_return=_make_chat_response(json.dumps(payload)))
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "cached_demo"
+
+
+def test_missing_required_guardrail_type_falls_back(monkeypatch):
+    """Guardrails missing a required type triggers completeness validation → cached_demo."""
+    from backend.services.granite_analyser import call_granite
+
+    payload = _complete_granite_payload()
+    # Remove all skill_preservation guardrails
+    payload["guardrails"] = [
+        g for g in payload["guardrails"] if g["type"] != "skill_preservation"
+    ]
+    _fake_sdk_modules(monkeypatch, chat_return=_make_chat_response(json.dumps(payload)))
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "cached_demo"
+
+
+def test_fewer_than_6_workflow_steps_falls_back(monkeypatch):
+    """Fewer than 6 safer_workflow_steps triggers Pydantic ValidationError → cached_demo."""
+    from backend.services.granite_analyser import call_granite
+
+    payload = _complete_granite_payload()
+    payload["safer_workflow_steps"] = payload["safer_workflow_steps"][:4]  # only 4
+    _fake_sdk_modules(monkeypatch, chat_return=_make_chat_response(json.dumps(payload)))
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "cached_demo"
+
+
+def test_ai_step_without_fallback_falls_back(monkeypatch):
+    """An AI step with no fallback_procedure triggers completeness validation → cached_demo."""
+    from backend.services.granite_analyser import call_granite
+
+    payload = _complete_granite_payload()
+    # Find the ai step and remove its fallback
+    for step in payload["safer_workflow_steps"]:
+        if step["executor"] == "ai":
+            step["fallback_procedure"] = None
+            break
+    _fake_sdk_modules(monkeypatch, chat_return=_make_chat_response(json.dumps(payload)))
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "cached_demo"
+
+
+def test_hybrid_step_without_approval_falls_back(monkeypatch):
+    """A hybrid step with requires_approval=False triggers completeness validation → cached_demo."""
+    from backend.services.granite_analyser import call_granite
+
+    payload = _complete_granite_payload()
+    # Find the first hybrid step and unset approval
+    for step in payload["safer_workflow_steps"]:
+        if step["executor"] == "hybrid":
+            step["requires_approval"] = False
+            break
+    _fake_sdk_modules(monkeypatch, chat_return=_make_chat_response(json.dumps(payload)))
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "cached_demo"
+
+
+def test_complete_output_preserves_live_granite(monkeypatch):
+    """A structurally complete and valid live response keeps provider=live_granite."""
+    from backend.services.granite_analyser import call_granite
+
+    # Use the canonical complete payload unchanged
+    _fake_sdk_modules(
+        monkeypatch,
+        chat_return=_make_chat_response(_valid_granite_json()),
+    )
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "live_granite"
+    assert len(result.redesign_recommendations) >= 5
+    assert len(result.guardrails) >= 5
+    assert len(result.safer_workflow_steps) >= 6
+
+
+def test_cached_fallback_unchanged(monkeypatch):
+    """Cached demo retains provider=cached_demo and required counts regardless of failures."""
+    from backend.services.granite_analyser import call_granite
+
+    # Force fallback by raising an exception
+    _fake_sdk_modules(monkeypatch, chat_side_effect=RuntimeError("network error"))
+    result = call_granite("some prompt", _settings_with_creds())
+    assert result.provider == "cached_demo"
+    # Cached demo must meet completeness requirements
+    assert len(result.redesign_recommendations) >= 5
+    assert len(result.guardrails) >= 5
+    assert len(result.safer_workflow_steps) >= 6
+    required_types = {
+        "human_approval", "confidence_threshold", "exception_routing",
+        "manual_fallback", "skill_preservation", "audit_trail",
+    }
+    assert {g.type for g in result.guardrails} >= required_types
+
+
+def test_validate_completeness_returns_none_for_complete_output():
+    """_validate_completeness returns None for a structurally complete payload."""
+    from backend.services.granite_analyser import _validate_completeness
+    from backend.models.schemas import GraniteOutput
+
+    result = GraniteOutput.model_validate(_complete_granite_payload())
+    assert _validate_completeness(result) is None
+
+
+def test_validate_completeness_detects_missing_guardrail_type():
+    """_validate_completeness returns a reason when a guardrail type is missing."""
+    from backend.services.granite_analyser import _validate_completeness
+    from backend.models.schemas import GraniteOutput
+
+    payload = _complete_granite_payload()
+    payload["guardrails"] = [
+        g for g in payload["guardrails"] if g["type"] != "audit_trail"
+    ]
+    result = GraniteOutput.model_validate(payload)
+    reason = _validate_completeness(result)
+    assert reason is not None
+    assert "audit_trail" in reason
+
+
+def test_validate_completeness_detects_ai_step_missing_fallback():
+    """_validate_completeness catches an AI step with no fallback_procedure."""
+    from backend.services.granite_analyser import _validate_completeness
+    from backend.models.schemas import GraniteOutput
+
+    payload = _complete_granite_payload()
+    for step in payload["safer_workflow_steps"]:
+        if step["executor"] == "ai":
+            step["fallback_procedure"] = None
+            break
+    result = GraniteOutput.model_validate(payload)
+    reason = _validate_completeness(result)
+    assert reason is not None
+    assert "fallback_procedure" in reason
+
+
+def test_validate_completeness_detects_hybrid_without_approval():
+    """_validate_completeness catches a hybrid step with requires_approval=False."""
+    from backend.services.granite_analyser import _validate_completeness
+    from backend.models.schemas import GraniteOutput
+
+    payload = _complete_granite_payload()
+    for step in payload["safer_workflow_steps"]:
+        if step["executor"] == "hybrid":
+            step["requires_approval"] = False
+            break
+    result = GraniteOutput.model_validate(payload)
+    reason = _validate_completeness(result)
+    assert reason is not None
+    assert "requires_approval" in reason
+
+
+def test_fallback_logs_reason(monkeypatch, caplog):
+    """call_granite logs the validation failure reason before falling back."""
+    import logging
+    from backend.services.granite_analyser import call_granite
+
+    payload = _complete_granite_payload()
+    # Drop skill_preservation to trigger completeness failure
+    payload["guardrails"] = [
+        g for g in payload["guardrails"] if g["type"] != "skill_preservation"
+    ]
+    _fake_sdk_modules(monkeypatch, chat_return=_make_chat_response(json.dumps(payload)))
+
+    with caplog.at_level(logging.WARNING, logger="backend.services.granite_analyser"):
+        result = call_granite("some prompt", _settings_with_creds())
+
+    assert result.provider == "cached_demo"
+    assert "skill_preservation" in caplog.text
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 
@@ -106,6 +106,28 @@ class GuardrailItem(BaseModel):
     description: str
 
 
+# Required guardrail types that must each appear at least once in live output.
+REQUIRED_GUARDRAIL_TYPES: frozenset[str] = frozenset({
+    "human_approval",
+    "confidence_threshold",
+    "exception_routing",
+    "manual_fallback",
+    "skill_preservation",
+    "audit_trail",
+})
+
+# Required conceptual keywords that must appear in safer_workflow_steps labels.
+REQUIRED_WORKFLOW_CONCEPTS: dict[str, list[str]] = {
+    "ticket_intake":     ["ticket", "intake", "creat", "receiv", "log"],
+    "assignment":        ["assign", "route", "dispatch", "triage"],
+    "first_response":    ["first response", "initial response", "response sent", "first contact"],
+    "exception":         ["exception", "escalat", "flag"],
+    "resolution":        ["resol", "fix", "close", "complet", "solv"],
+    "reconciliation":    ["reconcili", "sync", "synchronis", "synchroniz", "record"],
+    "closure":           ["clos", "done", "complet", "finish", "resolv"],
+}
+
+
 class SaferStep(BaseModel):
     step_id: str
     label: str
@@ -115,12 +137,18 @@ class SaferStep(BaseModel):
     confidence_threshold: float | None = None
 
 
+# Annotated list types with min/max constraints for GraniteOutput
+_RecommendationList = Annotated[list[str], Field(min_length=5, max_length=8)]
+_GuardrailList = Annotated[list[GuardrailItem], Field(min_length=5, max_length=8)]
+_SaferStepList = Annotated[list[SaferStep], Field(min_length=6, max_length=10)]
+
+
 class GraniteOutput(BaseModel):
     workflow_gap_narrative: str
     hidden_work_narrative: str
-    redesign_recommendations: list[str] = Field(min_length=3)
-    guardrails: list[GuardrailItem]
-    safer_workflow_steps: list[SaferStep]
+    redesign_recommendations: _RecommendationList
+    guardrails: _GuardrailList
+    safer_workflow_steps: _SaferStepList
     provider: Literal["live_granite", "cached_demo"]
 
 
