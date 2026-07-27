@@ -21,6 +21,71 @@ const LABELS: Record<string, string> = {
   expected_failure_recovery_minutes: 'Failure-recovery time (min)',
 }
 
+const CHART_BARS = [
+  { key: 'review_overhead', label: 'Review Overhead', color: 'bg-blue-500' },
+  { key: 'correction_overhead', label: 'Correction Overhead', color: 'bg-green-500' },
+  { key: 'exception_overhead', label: 'Exception Overhead', color: 'bg-amber-500' },
+  { key: 'maintenance_overhead', label: 'Maintenance Overhead', color: 'bg-purple-500' },
+  { key: 'failure_recovery_overhead', label: 'Failure Recovery Overhead', color: 'bg-red-500' },
+] as const
+
+function OverheadBarChart({
+  review_overhead,
+  correction_overhead,
+  exception_overhead,
+  maintenance_overhead,
+  failure_recovery_overhead,
+}: Pick<Props, 'review_overhead' | 'correction_overhead' | 'exception_overhead' | 'maintenance_overhead' | 'failure_recovery_overhead'>) {
+  const values = [
+    review_overhead,
+    correction_overhead,
+    exception_overhead,
+    maintenance_overhead,
+    failure_recovery_overhead,
+  ]
+  const maxValue = Math.max(...values, 1) // Avoid division by zero
+
+  return (
+    <div className="mb-6" role="img" aria-label={`AI overhead breakdown: review ${review_overhead.toFixed(1)} min, correction ${correction_overhead.toFixed(1)} min, exception ${exception_overhead.toFixed(1)} min, maintenance ${maintenance_overhead.toFixed(1)} min, failure recovery ${failure_recovery_overhead.toFixed(1)} min`}>
+      <h4 className="font-semibold text-gray-700 mb-3">AI Overhead Components</h4>
+      <div className="space-y-3" style={{ maxWidth: '500px' }}>
+        {CHART_BARS.map((bar, idx) => {
+          const value = values[idx]
+          const percentage = (value / maxValue) * 100
+          const showValueInBar = value > 0 && percentage > 15
+          return (
+            <div key={bar.key} className="group">
+              <div className="flex justify-between items-baseline mb-1">
+                <span className="text-sm font-medium text-gray-700">{bar.label}</span>
+                {!showValueInBar && (
+                  <span className="text-sm font-mono font-semibold text-gray-900">{value.toFixed(1)} min</span>
+                )}
+              </div>
+              <div className="relative h-6 bg-gray-100 rounded overflow-hidden">
+                <div
+                  className={`${bar.color} h-full rounded transition-all duration-500`}
+                  style={{ width: `${percentage}%`, minWidth: value > 0 ? '1.5rem' : '0' }}
+                  role="progressbar"
+                  aria-valuenow={value}
+                  aria-valuemin={0}
+                  aria-valuemax={maxValue}
+                  aria-label={`${bar.label}: ${value.toFixed(1)} minutes`}
+                >
+                  {showValueInBar && (
+                    <span className="absolute inset-0 flex items-center pl-2 text-white text-xs font-medium truncate">
+                      {value.toFixed(1)} min
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function OverheadBreakdown({
   assumptions,
   review_overhead,
@@ -40,7 +105,13 @@ export default function OverheadBreakdown({
 
   return (
     <div>
-      <h4 className="font-semibold text-gray-700 mb-3">AI Overhead Breakdown</h4>
+      <OverheadBarChart
+        review_overhead={review_overhead}
+        correction_overhead={correction_overhead}
+        exception_overhead={exception_overhead}
+        maintenance_overhead={maintenance_overhead}
+        failure_recovery_overhead={failure_recovery_overhead}
+      />
 
       {/* Component totals */}
       <div className="space-y-2 mb-4">
