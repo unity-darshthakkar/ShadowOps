@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiFetch } from '../api/client'
 import { useAnalysis } from '../context/AnalysisContext'
+import AnalysisLoading from '../components/AnalysisLoading'
 import type { ScenarioMeta, AnalysisResult } from '../types/api'
 
 export default function StageSetup() {
@@ -22,9 +23,11 @@ export default function StageSetup() {
   }, [])
 
   async function runAnalysis() {
-    if (!selected) return
+    if (!selected || loading) return
+
     setLoading(true)
     setError(null)
+
     try {
       const result = await apiFetch<AnalysisResult>('/analysis/run', {
         method: 'POST',
@@ -37,6 +40,10 @@ export default function StageSetup() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (loading) {
+    return <AnalysisLoading isLoading />
   }
 
   return (

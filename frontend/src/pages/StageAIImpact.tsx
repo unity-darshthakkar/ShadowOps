@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAnalysis } from '../context/AnalysisContext'
 import OverheadBreakdown from '../components/OverheadBreakdown'
 import MetricsCard from '../components/MetricsCard'
+import ExecutiveSummaryStrip from '../components/ExecutiveSummaryStrip'
 
 export default function StageAIImpact() {
   const { result } = useAnalysis()
@@ -32,6 +33,8 @@ export default function StageAIImpact() {
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Stage 3 — AI Impact</h2>
         <p className="text-sm text-gray-500">Scenario: {result.scenario_id}</p>
       </div>
+
+      <ExecutiveSummaryStrip />
 
       {/* Section A — Time comparison */}
       <section className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">

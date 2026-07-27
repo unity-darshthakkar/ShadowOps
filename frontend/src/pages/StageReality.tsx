@@ -3,6 +3,7 @@ import { useAnalysis } from '../context/AnalysisContext'
 import WorkflowDiff from '../components/WorkflowDiff'
 import HiddenWorkTable from '../components/HiddenWorkTable'
 import MetricsCard from '../components/MetricsCard'
+import ExecutiveSummaryStrip from '../components/ExecutiveSummaryStrip'
 
 export default function StageReality() {
   const { result } = useAnalysis()
@@ -24,6 +25,8 @@ export default function StageReality() {
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Stage 2 — Workflow Reality</h2>
         <p className="text-sm text-gray-500">Scenario: {result.scenario_id}</p>
       </div>
+
+      <ExecutiveSummaryStrip />
 
       {/* Section A — Workflow diff */}
       <section className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">

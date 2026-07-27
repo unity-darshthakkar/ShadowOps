@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useAnalysis } from '../context/AnalysisContext'
 import ReportExport from '../components/ReportExport'
+import ExecutiveSummaryStrip from '../components/ExecutiveSummaryStrip'
 import type { GuardrailType } from '../types/api'
 
 const GUARDRAIL_LABELS: Record<GuardrailType, string> = {
@@ -51,6 +52,8 @@ export default function StageRedesign() {
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Stage 4 — Safer Redesign</h2>
         <p className="text-sm text-gray-500">Scenario: {result.scenario_id}</p>
       </div>
+
+      <ExecutiveSummaryStrip />
 
       {/* Section A — Safer workflow steps */}
       <section className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
