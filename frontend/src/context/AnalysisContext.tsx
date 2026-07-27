@@ -3,7 +3,7 @@ import type { AnalysisResult } from '../types/api'
 
 interface AnalysisCtx {
   result: AnalysisResult | null
-  setResult: (r: AnalysisResult) => void
+  setResult: (r: AnalysisResult | null) => void
 }
 
 const AnalysisContext = createContext<AnalysisCtx>({

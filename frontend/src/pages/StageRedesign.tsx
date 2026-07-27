@@ -19,8 +19,13 @@ const EXECUTOR_COLORS: Record<string, string> = {
 }
 
 export default function StageRedesign() {
-  const { result } = useAnalysis()
+  const { result, setResult } = useAnalysis()
   const navigate = useNavigate()
+
+  function startNewAnalysis() {
+    setResult(null)
+    navigate('/setup')
+  }
 
   if (!result || !result.granite_output) {
     return (
@@ -143,9 +148,20 @@ export default function StageRedesign() {
         </p>
       </section>
 
-      <div className="flex justify-start">
-        <button onClick={() => navigate('/ai-impact')} className="border border-gray-300 text-gray-700 font-semibold px-5 py-2 rounded-lg hover:bg-gray-50">
-          ← Back
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          onClick={() => navigate('/ai-impact')}
+          className="border border-gray-300 text-gray-700 font-semibold px-5 py-2 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          aria-label="Go back to AI Impact stage"
+        >
+          ← Back to AI Impact
+        </button>
+        <button
+          onClick={startNewAnalysis}
+          className="bg-blue-700 hover:bg-blue-800 text-white font-semibold px-5 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+          aria-label="Start a new analysis — clears current results and returns to Setup"
+        >
+          Start New Analysis
         </button>
       </div>
     </div>
