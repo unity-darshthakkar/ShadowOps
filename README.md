@@ -3,124 +3,131 @@
 **AI Deployment Preflight Platform**  
 IBM July Wildcard Hackathon — *Build Intelligent Systems for the Future of Work*
 
-ShadowOps answers a question that is often skipped before organizations deploy AI:
+> **Reveal hidden work. Measure the AI Tax. Design safer human–AI workflows.**
 
-> **What will this automation actually save, what hidden work will remain, and what safeguards are required before deployment?**
+ShadowOps helps teams evaluate an AI automation proposal **before deployment**. It reconstructs the real workflow from activity logs, compares it with the documented process, calculates deterministic impact metrics, and uses IBM Granite to generate a safer hybrid redesign with approvals, guardrails, confidence thresholds, and fallback procedures.
 
-ShadowOps reconstructs how work is actually performed from structured activity logs, compares it with the documented workflow, estimates the true cost of AI automation, and generates a safer human-AI redesign using IBM Granite.
+## Try ShadowOps
+
+- **Live demo:** [https://shadowops-api.onrender.com](https://shadowops-api.onrender.com)
+- **GitHub:** [https://github.com/unity-darshthakkar/ShadowOps](https://github.com/unity-darshthakkar/ShadowOps)
+
+> The app runs on Render’s free tier, so the first visit may take a short time while the service wakes up.
+
+---
+
+## At a Glance
+
+| | |
+|---|---|
+| **Problem** | AI projects often automate the documented workflow while missing hidden human work and new operational overhead. |
+| **Solution** | ShadowOps reconstructs the actual workflow, calculates the AI Tax, and creates a safer human–AI redesign. |
+| **Core idea** | Deterministic metrics first; grounded IBM Granite reasoning second. |
+| **Demo result** | 5 official steps became 14 actual step types, revealing 20.1% hidden work and a 20.5% AI Tax. |
+| **IBM technology** | IBM Bob, IBM watsonx.ai, IBM Granite 4 H Small |
+| **Verification** | 60 backend tests, TypeScript validation, and a successful production build |
 
 ---
 
 ## The Problem
 
-Organizations often automate the workflow shown in policy documents, process diagrams, or operating procedures.
-
-However, the documented workflow rarely includes all the work employees actually perform:
+Organizations usually automate the workflow shown in process documents. The real workflow often contains additional work that management does not see:
 
 - manual status checks
-- follow-up messages
+- follow-ups
 - context reconstruction
-- duplicate data entry
+- duplicate entry
 - rework
 - exception handling
-- escalations
+- escalation
 - reconciliation across systems
 
-When these activities are ignored, an AI deployment can appear more valuable than it really is.
+Automation also creates new costs: reviewing AI output, correcting errors, handling exceptions, maintaining integrations, and recovering from failures.
 
-Automation may also introduce new work:
-
-- reviewing AI output
-- correcting mistakes
-- handling exceptions
-- maintaining prompts and integrations
-- recovering from failures
-- preserving employee expertise
-
-ShadowOps exposes these costs before deployment.
+Ignoring this work can make an AI project look more valuable than it really is.
 
 ---
 
-## The Solution
-
-ShadowOps provides a four-stage AI deployment preflight.
+## How ShadowOps Works
 
 ### 1. Setup
 
-Select a synthetic workflow scenario and run the preflight analysis.
+Select a workflow scenario and run the preflight.
 
 ### 2. Workflow Reality
 
-Compare the official workflow with the workflow reconstructed from activity logs.
-
-ShadowOps identifies hidden work and links every finding to supporting event evidence.
+ShadowOps reconstructs the actual workflow from structured events and compares it with the official process. Each hidden-work finding is linked to supporting evidence.
 
 ### 3. AI Impact
 
-Estimate the expected impact of the proposed automation, including:
+The deterministic metrics engine calculates:
 
+- hidden-work ratio
 - gross time saved
 - review overhead
 - correction overhead
-- exception-handling overhead
+- exception overhead
 - maintenance overhead
 - failure-recovery overhead
 - AI Tax
 - net time saved
+- burden concentration
 - automation readiness
 - skill-loss risk
-- burden concentration by role
 
 ### 4. Safer Redesign
 
-IBM Granite generates a grounded human-AI workflow containing:
+IBM Granite receives grounded workflow evidence and produces:
 
-- AI, human, and hybrid execution labels
-- confidence thresholds
+- a safer AI, human, and hybrid workflow
 - approval requirements
+- confidence thresholds
 - exception routing
-- manual fallback procedures
+- manual fallbacks
 - skill-preservation controls
-- audit-trail requirements
-- evidence-based redesign recommendations
+- audit-trail guardrails
+- evidence-based recommendations
 
-The complete preflight can be exported as JSON.
-
----
-
-## Why ShadowOps Is Different
-
-Most AI automation tools focus on what the model can automate.
-
-ShadowOps focuses on what the deployment team may have missed.
-
-It separates:
-
-- **deterministic analysis**, used for metrics and evidence
-- **generative AI reasoning**, used for narratives, guardrails, and redesign recommendations
-
-IBM Granite does not invent the numerical results. It receives grounded workflow evidence and deterministic metrics, then explains the risks and proposes a safer redesign.
+The full result can be exported as JSON.
 
 ---
 
-## Demo Flow
+## Demo Scenario
 
 The included customer-support scenario contains:
 
-- 5 official workflow steps
-- 46 synthetic events across 5 tickets
-- 14 actual workflow step types
-- 19 hidden-work events
-- 8 hidden-work categories
+- **5** official workflow steps
+- **46** synthetic events across 5 tickets
+- **14** actual workflow step types
+- **19** hidden-work events
+- **8** hidden-work categories
 
-The preflight identifies approximately:
+Example outcome:
 
-- 20.1% hidden-work ratio
-- 61% burden concentration
-- 20.5% AI Tax
-- 640.5 minutes of net estimated time savings
+| Metric | Result |
+|---|---:|
+| Hidden Work Ratio | 20.1% |
+| Burden Concentration | 61% |
+| Gross Time Saved | 805.7 min |
+| AI Overhead | 165.2 min |
+| AI Tax | 20.5% |
+| Net Time Saved | 640.5 min |
 
-These values are deterministic and based on the supplied scenario.
+All numerical results are calculated deterministically by the backend.
+
+---
+
+## Why It Is Different
+
+Most automation tools ask:
+
+> What can the AI automate?
+
+ShadowOps asks:
+
+> What work did the automation proposal miss, what new burden will it create, and what controls are required?
+
+The language model **does not calculate business metrics**. The backend computes the evidence and numbers first. IBM Granite then interprets those grounded results and proposes a safer redesign.
 
 ---
 
@@ -129,258 +136,136 @@ These values are deterministic and based on the supplied scenario.
 ![ShadowOps architecture](docs/architecture/shadowops-architecture.png)
 
 ```text
-┌───────────────────────────────┐
-│ React + TypeScript Frontend   │
-│                               │
-│ Setup                         │
-│ Workflow Reality              │
-│ AI Impact                     │
-│ Safer Redesign                │
-└───────────────┬───────────────┘
-                │ REST API
-                ▼
-┌───────────────────────────────┐
-│ FastAPI Backend               │
-│                               │
-│ Scenario Loader               │
-│ Workflow Reconstruction       │
-│ Hidden-Work Detection         │
-│ Deterministic Metrics Engine  │
-│ PII Redaction                 │
-│ Report Export                 │
-└───────────────┬───────────────┘
-                │ grounded prompt
-                ▼
-┌───────────────────────────────┐
-│ IBM watsonx.ai                │
-│ IBM Granite 4 H Small         │
-│                               │
-│ Workflow narratives           │
-│ Redesign recommendations      │
-│ Guardrails                    │
-│ Safer workflow generation     │
-└───────────────────────────────┘
-```
-
-### Processing Pipeline
-
-```text
-Synthetic event logs
-        │
-        ▼
-Actual workflow reconstruction
-        │
-        ▼
-Hidden-work classification and evidence
-        │
-        ▼
-Deterministic metric calculation
-        │
-        ▼
-PII redaction and grounded prompt construction
-        │
-        ▼
-IBM Granite structured JSON response
-        │
-        ▼
+Synthetic activity logs
+        ↓
+Workflow reconstruction
+        ↓
+Hidden-work detection
+        ↓
+Deterministic metrics and AI Tax
+        ↓
+PII redaction
+        ↓
+IBM Granite through watsonx.ai
+        ↓
 Schema and completeness validation
-        │
-        ├── valid → Live Granite result
-        │
-        └── invalid/unavailable → Cached demo fallback
+        ├── Valid → Live Granite result
+        └── Invalid/unavailable → Cached fallback
 ```
+
+### Technology Stack
+
+- **Frontend:** React, TypeScript, Vite, CSS
+- **Backend:** Python, FastAPI, Pydantic
+- **AI:** IBM watsonx.ai, IBM Granite 4 H Small
+- **Development:** IBM Bob, GitHub, Docker
+- **Testing:** pytest, TypeScript compiler, Vite production build
+- **Hosting:** Render
 
 ---
 
 ## IBM Granite Integration
 
-ShadowOps uses IBM Granite through `watsonx.ai` to generate grounded workflow analysis and safer redesigns.
+The grounded prompt includes:
 
-The model receives:
-
-- the official workflow
-- the reconstructed actual workflow
-- detected hidden-work categories
-- supporting event evidence
+- official workflow
+- reconstructed actual workflow
+- hidden-work categories and event evidence
 - deterministic metrics
 - AI-overhead assumptions
-- the proposed automation workflow
-- a strict JSON output schema
+- proposed automation workflow
+- strict JSON output requirements
 
-Live output must pass structural and completeness validation before it is displayed.
+Live output is shown only after schema and completeness validation. ShadowOps requires:
 
-ShadowOps requires:
-
-- 5–8 redesign recommendations
-- 5–8 guardrails
-- all six required guardrail categories
+- 5–8 recommendations
+- all 6 required guardrail types
 - 6–10 safer workflow steps
-- fallbacks for every AI or hybrid step
-- approval requirements for hybrid steps
+- fallbacks for AI and hybrid steps
+- approval for hybrid steps
 - valid confidence thresholds
-- complete beginning-to-end workflow coverage
+- complete workflow coverage
 
-If authentication, generation, parsing, or validation fails, ShadowOps automatically uses cached demonstration output.
-
-The UI displays:
-
-- `🟢 Live IBM Granite`
-- `🟡 Cached Demo Data`
-
-### Environment Configuration
-
-Create `.env` from `.env.example`:
-
-```env
-WATSONX_API_KEY=<your-api-key>
-WATSONX_URL=https://us-south.ml.cloud.ibm.com
-WATSONX_PROJECT_ID=<your-project-id>
-WATSONX_MODEL_ID=ibm/granite-4-h-small
-```
-
-Never commit `.env` or expose watsonx credentials in screenshots, logs, or documentation.
+If IBM authentication, generation, parsing, or validation fails, the app automatically uses a cached demonstration response.
 
 ---
 
 ## IBM Bob Usage
 
-IBM Bob was the primary development tool used to build ShadowOps.
+IBM Bob was the **primary development tool** for ShadowOps.
 
-Bob was used to:
+It was used to:
 
-- plan the application architecture
-- scaffold the FastAPI backend
-- scaffold the React and TypeScript frontend
+- plan the architecture
+- scaffold the FastAPI and React application
 - define API routes and Pydantic schemas
 - implement workflow reconstruction
 - implement deterministic metric calculations
 - build the four-stage interface
 - integrate IBM Granite through watsonx.ai
-- migrate from the deprecated text-generation endpoint to the chat endpoint
-- enforce structured Granite responses
-- add completeness validation and fallback behavior
-- create and expand the backend test suite
-- improve Windows setup documentation
+- add structured-output and completeness validation
+- build and expand the backend test suite
+- improve setup and Windows documentation
 
-The project evolved through iterative Bob tasks rather than a single generated code dump. Each major feature was tested before being committed.
-
-A secondary coding assistant was used only for targeted review and polish, including waiting-event semantics, privacy checks, role-based burden concentration, and Granite prompt grounding.
+A secondary coding assistant was used for targeted QA and frontend polish.
 
 ---
 
-## Technical Challenges
+## Safety and Responsible AI
 
-### Reconstructing the real workflow
-
-The official process contained only five steps, while the event logs contained fourteen distinct step types.
-
-ShadowOps needed to preserve normal delay events such as `waiting` without incorrectly classifying them as employee effort or automatable hidden work.
-
-### Measuring the AI Tax
-
-Gross time savings alone overstate automation value.
-
-ShadowOps calculates five separate overhead categories and subtracts them from gross savings to estimate net impact.
-
-### Preventing hallucinated metrics
-
-IBM Granite is not used to calculate numerical values.
-
-All metrics are generated deterministically before the model is called. Granite receives those results as grounded context.
-
-### Reliable structured generation
-
-The original Granite integration used the deprecated text-generation endpoint and sometimes returned non-JSON output.
-
-The integration was migrated to the watsonx chat endpoint with JSON response mode, Pydantic validation, completeness validation, and a cached fallback.
-
-### Protecting privacy
-
-Synthetic inputs are used throughout the demo. A redaction layer also removes likely personal names before sending workflow evidence to the model while preserving role names and workflow terminology.
+- synthetic demonstration data only
+- no demographic attributes
+- no individual employee rankings
+- PII redaction before model invocation
+- deterministic metrics instead of LLM-generated numbers
+- human approval for hybrid steps
+- manual fallbacks for AI-dependent steps
+- skill-preservation guardrails
+- audit-trail recommendations
+- clear heuristic and prototype disclaimers
 
 ---
 
-## Metrics
+## Verification
 
-All numerical metrics are deterministic.
+ShadowOps currently passes **60 backend tests** covering:
 
-| Metric | Formula |
-|---|---|
-| Hidden Work Ratio | hidden minutes ÷ total actual minutes |
-| Gross Time Saved | actual total − AI-automated total |
-| AI Tax | total AI overhead ÷ gross time saved |
-| Net Time Saved | gross time saved − total AI overhead |
-| Burden Concentration | highest hidden minutes for one role ÷ total hidden minutes |
-| Automation Readiness | weighted workflow-structure heuristic |
-| Skill-Loss Risk | heuristic based on concentration and automation readiness |
+- deterministic metric formulas
+- all five AI-overhead components
+- waiting-event classification
+- role-based burden concentration
+- PII redaction
+- Granite structured-output validation
+- required guardrail coverage
+- fallback procedures
+- API, parsing, and validation fallback behavior
+- credential-safe logging
+- provider-status accuracy
 
-### AI Overhead
+Frontend verification includes:
 
-```text
-AI Overhead =
-    review overhead
-  + correction overhead
-  + exception-handling overhead
-  + maintenance overhead
-  + failure-recovery overhead
+- TypeScript compilation
+- Vite production build
+
+Run the checks:
+
+```bash
+python -m pytest backend/tests -q
+
+cd frontend
+npx tsc --noEmit
+npm run build
 ```
 
-Input values come from the scenario’s automation proposal or documented defaults.
-
 ---
 
-## Ethical and Safety Constraints
-
-- No individual employee rankings or performance scores
-- No demographic attributes in the data schema
-- No real customer or employee data
-- Synthetic demonstration events only
-- PII redaction before model invocation
-- Human approval for hybrid workflow steps
-- Manual fallback procedures for AI-dependent steps
-- Skill-preservation guardrails
-- Audit-trail recommendations
-- Scenario-based heuristics clearly labeled as non-validated assessments
-- Disclaimer included in every exported report
-
----
-
-## Technology Stack
-
-### Backend
-
-- Python
-- FastAPI
-- Pydantic
-- SQLite
-- pytest
-- IBM watsonx.ai Python SDK
-- IBM Granite 4 H Small
-
-### Frontend
-
-- React
-- TypeScript
-- Vite
-- CSS
-
-### Development
-
-- IBM Bob
-- Git and GitHub
-- Docker
-
----
-
-## Quick Start
+## Run Locally
 
 ### Requirements
 
 - Python 3.11+
 - Node.js 18+
 - npm
-- Optional: IBM watsonx.ai credentials
-- Optional: Docker Desktop
 
 ### Backend
 
@@ -406,7 +291,7 @@ python -m uvicorn backend.main:app --reload --port 8000
 
 ### Frontend
 
-Open a separate terminal:
+In a separate terminal:
 
 ```bash
 cd frontend
@@ -414,13 +299,22 @@ npm install
 npm run dev
 ```
 
-Open the local URL shown by Vite, normally:
+Open the URL printed by Vite, normally `http://localhost:5173`.
 
-```text
-http://localhost:5173
+---
+
+## watsonx.ai Configuration
+
+Add the following values to `.env`:
+
+```env
+WATSONX_API_KEY=<your-api-key>
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+WATSONX_PROJECT_ID=<your-project-id>
+WATSONX_MODEL_ID=ibm/granite-4-h-small
 ```
 
-If that port is already occupied, Vite may select another port automatically.
+Never commit `.env` or expose credentials in frontend code, logs, screenshots, or documentation.
 
 ---
 
@@ -431,59 +325,7 @@ docker build -t shadowops .
 docker run -p 8000:8000 --env-file .env shadowops
 ```
 
-Open:
-
-```text
-http://localhost:8000
-```
-
----
-
-## Running Tests
-
-### Backend
-
-```bash
-python -m pytest backend/tests -q
-```
-
-Current result:
-
-```text
-60 passed
-```
-
-### Frontend production build
-
-```bash
-cd frontend
-npm run build
-```
-
-### TypeScript check
-
-```bash
-cd frontend
-npx tsc --noEmit
-```
-
----
-
-## Windows Notes
-
-If PowerShell blocks virtual-environment activation:
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-Activate the environment using:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-The application has been tested on Python 3.13, though Python 3.11 or 3.12 may provide the broadest package compatibility.
+Then open `http://localhost:8000`.
 
 ---
 
@@ -491,65 +333,33 @@ The application has been tested on Python 3.13, though Python 3.11 or 3.12 may p
 
 ```text
 backend/
-├── data/                 Synthetic workflow scenarios
-├── models/               Pydantic request and response schemas
-├── services/             Analysis, metrics, Granite, and redaction logic
-├── tests/                Backend test suite
-└── main.py               FastAPI application
+├── data/          Synthetic scenarios
+├── models/        Pydantic schemas
+├── services/      Analysis, metrics, Granite, and redaction
+├── tests/         Backend tests
+└── main.py        FastAPI application
 
 frontend/
-├── src/                  React and TypeScript interface
-└── dist/                 Production build output
+└── src/           React and TypeScript interface
 
-docs/                     Planning and architecture documentation
-CLAUDE_REVIEW.md           Secondary architecture and QA review
-Dockerfile                 Container build
-requirements.txt           Python dependencies
+docs/
+└── architecture/  Architecture diagram
 ```
-
----
-
-## Report Export
-
-ShadowOps exports a JSON report containing:
-
-- analysis metadata
-- official workflow
-- actual workflow
-- hidden-work evidence
-- deterministic metrics
-- Granite narratives
-- redesign recommendations
-- guardrails
-- safer workflow steps
-- provider status
-- ethical disclaimer
 
 ---
 
 ## Future Work
 
-- Upload custom workflow definitions and event logs
-- Support CSV and JSON ingestion
-- Add interactive workflow diagrams
-- Compare multiple automation proposals
-- Add scenario sensitivity analysis
-- Generate management and technical report formats
-- Support additional watsonx models
-- Add role-level workload visualizations
-- Store analysis history
-- Deploy a hosted demonstration
-
----
-
-## Repository
-
-GitHub: https://github.com/unity-darshthakkar/ShadowOps
+- custom CSV and JSON workflow uploads
+- additional workflow scenarios
+- proposal comparison and sensitivity analysis
+- interactive workflow diagrams
+- analysis history
+- management and technical report formats
+- production enterprise-system integrations
 
 ---
 
 ## Disclaimer
 
-ShadowOps is a hackathon prototype built with synthetic data.
-
-Its recommendations are intended for exploratory workflow analysis only. They are not production-grade deployment decisions, employee assessments, legal guidance, or compliance certifications. Human judgment should always be used before automating a business workflow.
+ShadowOps is a hackathon prototype built with synthetic data. Its output is intended for exploratory workflow analysis only and is not a production deployment decision, employee assessment, legal opinion, or compliance certification. Human judgment should always be used before automating a business workflow.
