@@ -10,3 +10,4 @@ anyio>=4.0.0
 # ibm-watsonx-ai is optional for live Granite; install separately with:
 #   pip install ibm-watsonx-ai
 # When absent, the application automatically uses CachedDemoProvider.
+ibm-watsonx-ai==1.6.0
